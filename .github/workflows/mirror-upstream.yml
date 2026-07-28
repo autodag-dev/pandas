@@ -1,0 +1,94 @@
+name: Mirror Upstream
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      max_prs:
+        description: Maximum PR branches to update in this run
+        default: "2"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+concurrency:
+  group: mirror-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/pandas-dev/pandas.git
+  MAX_PRS: ${{ inputs.max_prs || '2' }}
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.MIRROR_TOKEN }}
+
+      - name: Mirror upstream refs
+        env:
+          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          git config user.name "dagz-mirror"
+          git config user.email "dagz-mirror@autodag.dev"
+          git remote add upstream "$UPSTREAM"
+
+          git fetch upstream main
+          upstream_main=$(git rev-parse FETCH_HEAD)
+
+          if [ "$(git rev-parse origin/main^1)" != "$upstream_main" ]; then
+            echo "main: rebasing dagz commit onto $upstream_main"
+            git checkout -q -B main origin/main
+            git rebase --onto "$upstream_main" main^ main
+            git push --force origin main
+          fi
+
+          mirrored_prs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" --jq '.[].head.ref')
+
+          pushed=0
+          pr_failures=0
+          while IFS=$'\t' read -r number head_sha head_owner head_ref title; do
+            branch="$head_owner/$head_ref"
+            our_sha=$(git rev-parse --verify --quiet "origin/$branch" || true)
+
+            if [ "$our_sha" != "$head_sha" ]; then
+              if [ "$pushed" -ge "$MAX_PRS" ]; then
+                echo "reached MAX_PRS=$MAX_PRS, remaining PRs deferred to the next run"
+                continue
+              fi
+              echo "$branch: $head_sha"
+              git fetch upstream "refs/pull/$number/head"
+              git push --force origin "$head_sha:refs/heads/$branch"
+              pushed=$((pushed + 1))
+              our_sha="$head_sha"
+            fi
+
+            if [ -n "$our_sha" ] && ! grep -qxF "$branch" <<<"$mirrored_prs"; then
+              if ! gh api --method POST "repos/$GITHUB_REPOSITORY/pulls" \
+                   -f "title=$title" \
+                   -f "head=$branch" \
+                   -f "base=main" \
+                   -f "body=Mirror of pandas-dev/pandas#$number. Runs the pandas test suite through dagz." \
+                   --jq '.html_url'; then
+                pr_failures=$((pr_failures + 1))
+              fi
+            fi
+          done < <(gh api "repos/pandas-dev/pandas/pulls?state=open&sort=updated&direction=desc&per_page=100" \
+                     --jq '.[] | [.number, .head.sha, .head.repo.owner.login, .head.ref, .title] | @tsv')
+
+          if [ "$pr_failures" -gt 0 ]; then
+            echo "$pr_failures pull requests could not be created; mirrored branches are up to date"
+            exit 1
+          fi
