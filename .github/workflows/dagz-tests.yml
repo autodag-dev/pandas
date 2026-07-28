@@ -1,0 +1,114 @@
+name: Dagz Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+concurrency:
+  group: dagz-tests-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PIXI_ENVIRONMENT: py313
+  DAGZ_URL: https://cloud.dagz.run
+  DAGZ_PROFILE: py313
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    services:
+      mysql:
+        image: mysql:9
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: pandas
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3306:3306
+
+      postgres:
+        image: postgres:18
+        env:
+          PGUSER: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pandas
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      moto:
+        image: motoserver/moto:5.1.18
+        ports:
+          - 5000:5000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Resolve upstream commit
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -n "$PR_HEAD_SHA" ]; then
+            echo "GIT_COMMIT_HASH=$PR_HEAD_SHA" >> "$GITHUB_ENV"
+          else
+            echo "GIT_COMMIT_HASH=$(git rev-parse HEAD^1)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Unpack collector certificate
+        env:
+          DAGZ_COLLECTOR_BUNDLE: ${{ secrets.DAGZ_COLLECTOR_BUNDLE }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dagz-home/collector/tls"
+          echo "$DAGZ_COLLECTOR_BUNDLE" | base64 -d | tar -x -C "$RUNNER_TEMP/dagz-home/collector/tls"
+          echo "DAGZ_HOME=$RUNNER_TEMP/dagz-home" >> "$GITHUB_ENV"
+
+      - name: Create virtual environment with Pixi
+        uses: ./.github/actions/setup-pixi
+        with:
+          environment: ${{ env.PIXI_ENVIRONMENT }}
+
+      - name: Build pandas
+        run: |
+          pixi run --environment "$PIXI_ENVIRONMENT" build-pandas --editable
+
+      - name: Install dagz
+        run: |
+          pixi run --environment "$PIXI_ENVIRONMENT" python -m pip install --pre dagz
+
+      - name: Test
+        env:
+          CI_NODE_TOTAL: 1
+          CI_NODE_INDEX: 1
+          PANDAS_FUTURE_INFER_STRING: 1
+          PANDAS_FUTURE_PYTHON_SCALARS: 0
+          PANDAS_MOTO_URL: http://localhost:5000
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pixi run --environment "$PIXI_ENVIRONMENT" \
+            python -m pytest -r fE --dagz --dagz-workers=4 -m "not single_cpu" pandas
