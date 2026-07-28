@@ -1,0 +1,4 @@
+project:
+  uri: "git@github.com:pandas-dev/pandas.git"
+  timezone: UTC
+  public_url: "https://cloud.dagz.run"
