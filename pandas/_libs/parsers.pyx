@@ -103,6 +103,7 @@ from pandas._libs.khash cimport (
     kh_get_float64,
     kh_get_str,
     kh_get_str_starts_item,
+    kh_get_str_starts_item_expect_hit,
     kh_get_strbox,
     kh_init_float64,
     kh_init_str,
@@ -3266,18 +3267,20 @@ cdef int _try_bool_flex_nogil(parser_t *parser, int64_t col,
         for _ in range(lines):
             word = coliter_next(&it)
 
-            if kh_get_str_starts_item(na_hashset, word):
+            # bool tokens either reject on the first byte or are genuine
+            # hits; the deeper bloom filters would be pure overhead
+            if kh_get_str_starts_item_expect_hit(na_hashset, word):
                 # in the hash table
                 na_count[0] += 1
                 data[0] = NA
                 data += 1
                 continue
 
-            if kh_get_str_starts_item(true_hashset, word):
+            if kh_get_str_starts_item_expect_hit(true_hashset, word):
                 data[0] = 1
                 data += 1
                 continue
-            if kh_get_str_starts_item(false_hashset, word):
+            if kh_get_str_starts_item_expect_hit(false_hashset, word):
                 data[0] = 0
                 data += 1
                 continue
@@ -3290,12 +3293,12 @@ cdef int _try_bool_flex_nogil(parser_t *parser, int64_t col,
         for _ in range(lines):
             word = coliter_next(&it)
 
-            if kh_get_str_starts_item(true_hashset, word):
+            if kh_get_str_starts_item_expect_hit(true_hashset, word):
                 data[0] = 1
                 data += 1
                 continue
 
-            if kh_get_str_starts_item(false_hashset, word):
+            if kh_get_str_starts_item_expect_hit(false_hashset, word):
                 data[0] = 0
                 data += 1
                 continue
