@@ -1535,3 +1535,222 @@ def test_constructor_nat_sentinel_neighbours():
     assert Timestamp("1677-09-21 00:12:43.145224193")._value == -(2**63) + 1
     assert Timestamp.min._value == -(2**63) + 1
     assert Timestamp(NaT) is NaT
+
+
+@pytest.mark.parametrize(
+    "ts_input, kwargs",
+    [
+        (np.datetime64("2020-12-31T00:00:00.000000123", "ns"), {}),
+        (np.datetime64("2020-12-31", "s"), {}),
+        (date(2020, 12, 31), {}),
+        (datetime(2020, 12, 31), {}),
+        (1_609_372_800_000_000_123, {}),
+        (1_609_372_800, {"unit": "s"}),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg(ts_input, kwargs):
+    # GH#66533 nanosecond was silently dropped for everything but pydatetime.
+    #  The inputs carrying 123ns also pin down "set", not "add", semantics.
+    result = Timestamp(ts_input, nanosecond=5, **kwargs)
+    assert result.nanosecond == 5
+    assert result.unit == "ns"
+    assert result == Timestamp("2020-12-31") + Timedelta(nanoseconds=5)
+
+
+def test_timestamp_constructor_nanosecond_kwarg_float():
+    # GH#66533 non-integral float input; the 456ns pins down set-not-add, and
+    #  the microseconds must survive the overwrite
+    result = Timestamp(0.000123456, unit="s", nanosecond=5)
+    assert result == Timestamp("1970-01-01 00:00:00.000123") + Timedelta(nanoseconds=5)
+    assert result.microsecond == 123
+    assert result.nanosecond == 5
+
+
+@pytest.mark.parametrize(
+    "ts_input, kwargs",
+    [
+        (np.datetime64("1969-12-31T23:59:59.999999999", "ns"), {}),
+        (-1, {}),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg_pre_epoch(ts_input, kwargs):
+    # GH#66533 -1ns has 999 in the sub-microsecond field, so adding rather
+    #  than setting would carry into the microseconds
+    result = Timestamp(ts_input, nanosecond=5, **kwargs)
+    assert result == Timestamp("1969-12-31 23:59:59.999999") + Timedelta(nanoseconds=5)
+    assert result._value == -995
+
+
+@pytest.mark.parametrize(
+    "ts_input",
+    [
+        np.datetime64("2020-12-31T00:00:00.000123456", "ns"),
+        1_609_372_800_000_123_456,
+        datetime(2020, 12, 31, microsecond=123),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg_preserves_microsecond(ts_input):
+    # GH#66533 only the sub-microsecond field is overwritten
+    result = Timestamp(ts_input, nanosecond=5)
+    assert result.microsecond == 123
+    assert result.nanosecond == 5
+
+
+@pytest.mark.parametrize(
+    "ts_input, kwargs",
+    [
+        (np.datetime64("2020-12-31", "s"), {}),
+        (date(2020, 12, 31), {}),
+        (1_609_372_800, {"unit": "s"}),
+    ],
+)
+def test_timestamp_constructor_nanosecond_zero_not_passed(ts_input, kwargs):
+    # GH#66533 nanosecond=0 means "not passed", so the input's own
+    #  resolution is retained
+    result = Timestamp(ts_input, nanosecond=0, **kwargs)
+    assert result.unit == "s"
+    assert result == Timestamp(ts_input, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "ts_input",
+    [
+        np.datetime64("2020-12-31T00:00:00.000000123", "ns"),
+        1_609_372_800_000_000_123,
+    ],
+)
+def test_timestamp_constructor_nanosecond_zero_keeps_sub_microsecond(ts_input):
+    # GH#66533 "not passed" is the *only* meaning of nanosecond=0 -- it does not
+    #  zero an existing sub-microsecond value, matching the long-standing
+    #  pydatetime behaviour.  A non-zero nanosecond does overwrite.
+    assert Timestamp(ts_input).nanosecond == 123
+    assert Timestamp(ts_input, nanosecond=0).nanosecond == 123
+
+
+def test_timestamp_constructor_nanosecond_kwarg_tz_epoch_int():
+    # GH#66533 an epoch integer is UTC-based, so tz converts rather than
+    #  localizes
+    result = Timestamp(0, unit="s", nanosecond=5, tz="US/Pacific")
+    assert result._value == 5
+    assert result.nanosecond == 5
+    assert result.hour == 16
+
+
+@pytest.mark.parametrize(
+    "ts_input",
+    [
+        np.datetime64("1970-01-01", "s"),
+        date(1970, 1, 1),
+        datetime(1970, 1, 1),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg_tz_wall(ts_input):
+    # GH#66533 datetime64/date/datetime are wall times, so tz localizes
+    result = Timestamp(ts_input, nanosecond=5, tz="US/Pacific")
+    assert result._value == 8 * 3600 * 10**9 + 5
+    assert result.nanosecond == 5
+    assert result.hour == 0
+
+
+@pytest.mark.parametrize(
+    "ts_input, kwargs, nanosecond, msg",
+    [
+        # far-from-epoch: forcing ns resolution is what these do not fit in
+        (
+            np.datetime64("2500-01-01", "s"),
+            {},
+            5,
+            "Out of bounds nanosecond timestamp: 2500-01-01",
+        ),
+        # the date branch goes through convert_datetime_to_tsobject, whose
+        #  out-of-bounds message does not name the value
+        (date(2500, 1, 1), {}, 5, "Out of bounds nanosecond timestamp"),
+        (10**11, {"unit": "s"}, 5, "Out of bounds nanosecond timestamp: 5138-11-16"),
+        # in bounds until the sub-microsecond overwrite pushes it past the max
+        (
+            np.datetime64("2262-04-11T23:47:16.854775807", "ns"),
+            {},
+            999,
+            "Out of bounds nanosecond timestamp: 2262-04-11 23:47:16",
+        ),
+        (
+            Timestamp.max._value,
+            {},
+            999,
+            "Out of bounds nanosecond timestamp: 2262-04-11 23:47:16",
+        ),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg_out_of_bounds(
+    ts_input, kwargs, nanosecond, msg
+):
+    # GH#66533
+    with pytest.raises(OutOfBoundsDatetime, match=msg):
+        Timestamp(ts_input, nanosecond=nanosecond, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "ts_input, kwargs",
+    [
+        (np.datetime64(-9223372036854775807, "ns"), {}),
+        (-9223372036854775807, {}),
+        (datetime(1677, 9, 21, 0, 12, 43, 145224), {}),
+        # same instant spelled at us reso: the promotion to ns must happen after
+        #  the sub-microsecond overwrite, or nanosecond=193 is wrongly rejected
+        (np.datetime64("1677-09-21T00:12:43.145224", "us"), {}),
+        (-9223372036854776, {"unit": "us"}),
+        # non-integral, so this is the one entry that reaches the float branch:
+        #  convert_to_tsobject routes an integral float to the *int* branch via
+        #  `is_float_object(ts) and ts.is_integer()`
+        (-9223372036854.775, {"unit": "ms"}),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg_lands_on_nat_sentinel(ts_input, kwargs):
+    # GH#66510 this wall time maps to the NaT sentinel, which must raise
+    #  rather than silently returning NaT for an unrepresentable timestamp
+    msg = "Out of bounds nanosecond timestamp: 1677-09-21 00:12:43"
+    with pytest.raises(OutOfBoundsDatetime, match=msg):
+        Timestamp(ts_input, nanosecond=192, **kwargs)
+
+    # neighbours on either side: below is out of bounds, above is representable
+    with pytest.raises(OutOfBoundsDatetime, match="Out of bounds nanosecond timestamp"):
+        Timestamp(ts_input, nanosecond=191, **kwargs)
+    assert Timestamp(ts_input, nanosecond=193, **kwargs) == Timestamp.min
+
+
+@pytest.mark.parametrize(
+    "ts_input, tz, msg",
+    [
+        # a fixed offset shifts via tz_localize_to_utc_single's use_fixed path
+        (
+            np.datetime64(-9223372036854775807 + 32400 * 10**9, "ns"),
+            timezone(timedelta(hours=9)),
+            "Out of bounds nanosecond timestamp",
+        ),
+        # a tz carrying DST info instead goes through _get_utc_bounds; Tokyo's
+        #  pre-1888 LMT offset is +9:18:59
+        (
+            np.datetime64("1677-09-21T09:31:42.145224", "us"),
+            "Asia/Tokyo",
+            "underflows past",
+        ),
+    ],
+)
+def test_timestamp_constructor_nanosecond_kwarg_nat_sentinel_tz(ts_input, tz, msg):
+    # GH#66510 the wall time is in bounds; only the shift to UTC lands on the
+    #  sentinel, so it has to be rejected after the shift as well
+    with pytest.raises(OutOfBoundsDatetime, match=msg):
+        Timestamp(ts_input, nanosecond=192, tz=tz)
+
+
+@pytest.mark.parametrize("unit", ["ns", "us", "ms", "s"])
+def test_constructor_dst_aware_tz_shift_onto_nat_sentinel(unit):
+    # GH#66550 Asia/Tokyo's pre-1888 LMT offset is +9:18:59, so this wall time
+    #  shifts to exactly iNaT.  _get_utc_bounds handed that to bisect_right_i8,
+    #  which requires val >= tdata[0] (== iNaT+1); it returned 0, leaving the
+    #  following deltas[pos - 1] lookup to read out of bounds.
+    lmt_seconds = 9 * 3600 + 18 * 60 + 59
+    per_second = {"ns": 10**9, "us": 10**6, "ms": 10**3, "s": 1}[unit]
+    ts_input = np.datetime64(-(2**63) + lmt_seconds * per_second, unit)
+    with pytest.raises(OutOfBoundsDatetime, match="underflows past"):
+        Timestamp(ts_input, tz="Asia/Tokyo")
