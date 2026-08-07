@@ -2745,7 +2745,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
         index: bool = True,
         min_itemsize: int | dict[str, int] | None = None,
         nan_rep=None,
-        dropna: bool | None | lib.NoDefault = lib.no_default,
+        dropna: bool | lib.NoDefault | None = lib.no_default,
         data_columns: Literal[True] | list[str] | None = None,
         errors: OpenFileErrors = "strict",
         encoding: str = "UTF-8",
@@ -7101,9 +7101,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
         self,
         method: Literal["ffill", "bfill", "pad", "backfill"],
         *,
-        axis: None | Axis = None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit: None | int = None,
+        limit: int | None = None,
         limit_area: Literal["inside", "outside"] | None = None,
     ):
         if axis is None:
@@ -7382,9 +7382,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
     def ffill(
         self,
         *,
-        axis: None | Axis = None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit: None | int = None,
+        limit: int | None = None,
         limit_area: Literal["inside", "outside"] | None = None,
     ) -> Self:
         """
@@ -7487,9 +7487,9 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
     def bfill(
         self,
         *,
-        axis: None | Axis = None,
+        axis: Axis | None = None,
         inplace: bool = False,
-        limit: None | int = None,
+        limit: int | None = None,
         limit_area: Literal["inside", "outside"] | None = None,
     ) -> Self:
         """
