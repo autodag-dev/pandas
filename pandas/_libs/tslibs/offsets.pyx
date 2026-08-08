@@ -2638,7 +2638,7 @@ cdef class BusinessDay(BusinessMixin):
     business day or a number of business days. Business days exclude weekends
     (Saturday and Sunday) by default.
 
-    Attributes
+    Parameters
     ----------
     n : int, default 1
         The number of days represented.
@@ -6655,7 +6655,7 @@ cdef class CustomBusinessDay(BusinessDay):
 
     In CustomBusinessDay we can use custom weekmask, holidays, and calendar.
 
-    Attributes
+    Parameters
     ----------
     n : int, default 1
         The number of days represented.
