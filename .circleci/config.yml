@@ -1,0 +1,87 @@
+version: 2.1
+
+jobs:
+  test:
+    resource_class: large
+    docker:
+      - image: cimg/base:current
+      - image: mysql:9
+        environment:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: pandas
+      - image: postgres:18
+        environment:
+          PGUSER: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pandas
+      - image: motoserver/moto:5.1.18
+    environment:
+      PIXI_ENVIRONMENT: py313
+      DAGZ_URL: https://cloud.dagz.run
+      DAGZ_PROFILE: py313
+      PANDAS_FUTURE_INFER_STRING: "1"
+      PANDAS_FUTURE_PYTHON_SCALARS: "0"
+      PANDAS_MOTO_URL: http://localhost:5000
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - checkout
+
+      - run:
+          name: Resolve upstream commit
+          command: |
+            if [ -n "${CIRCLE_PULL_REQUEST:-}" ]; then
+              echo "export GIT_COMMIT_HASH=$CIRCLE_SHA1" >> "$BASH_ENV"
+            else
+              echo "export GIT_COMMIT_HASH=$(git rev-parse HEAD^1)" >> "$BASH_ENV"
+            fi
+
+      - run:
+          name: Unpack collector certificate
+          command: |
+            mkdir -p "$HOME/dagz-home/collector/tls"
+            echo "$DAGZ_COLLECTOR_BUNDLE" | base64 -d | tar -x -C "$HOME/dagz-home/collector/tls"
+            echo "export DAGZ_HOME=$HOME/dagz-home" >> "$BASH_ENV"
+
+      - run:
+          name: Install pixi
+          command: |
+            curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.69.0 bash
+            echo 'export PATH=$HOME/.pixi/bin:$PATH' >> "$BASH_ENV"
+
+      - run:
+          name: Create environment with pixi
+          no_output_timeout: 30m
+          command: pixi install --environment "$PIXI_ENVIRONMENT" --manifest-path pixi.toml
+
+      - run:
+          name: Build pandas
+          no_output_timeout: 30m
+          command: pixi run --environment "$PIXI_ENVIRONMENT" build-pandas --editable
+
+      - run:
+          name: Install dagz
+          command: pixi run --environment "$PIXI_ENVIRONMENT" python -m pip install --pre dagz
+
+      - run:
+          name: Wait for services
+          command: |
+            for hostport in 127.0.0.1:3306 127.0.0.1:5432 127.0.0.1:5000; do
+              host=${hostport%:*}; port=${hostport#*:}
+              for i in $(seq 1 60); do
+                (echo > "/dev/tcp/$host/$port") >/dev/null 2>&1 && break
+                sleep 2
+              done
+            done
+
+      - run:
+          name: Test
+          no_output_timeout: 60m
+          command: |
+            pixi run --environment "$PIXI_ENVIRONMENT" \
+              python -m pytest -r fE --dagz --dagz-workers=4 -m "not single_cpu" pandas
+
+workflows:
+  dagz-tests:
+    jobs:
+      - test
