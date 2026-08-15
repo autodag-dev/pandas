@@ -1274,8 +1274,11 @@ def read_csv(
     sep : str, default ','
         Character or regex pattern to treat as the delimiter. ``sep=None`` detects
         the separator from the first valid row of the file with Python's builtin
-        sniffer tool, ``csv.Sniffer``; it is supported only by the Python parsing
-        engine and must be combined with ``engine='python'`` explicitly.
+        sniffer tool, ``csv.Sniffer``. Sniffing is only implemented by the Python
+        parsing engine, so ``sep=None`` selects that engine automatically and
+        emits a ``ParserWarning`` unless ``engine='python'`` is passed explicitly;
+        pairing ``sep=None`` with a non-Python engine such as ``'c'`` raises a
+        ``ValueError``.
         In addition, separators longer than 1 character and different from
         ``'\\s+'`` will be interpreted as regular expressions and will force
         the use of the Python parsing engine. Note that regex delimiters are prone
@@ -1874,8 +1877,11 @@ def read_table(
     sep : str, default '\\t' (tab-stop)
         Character or regex pattern to treat as the delimiter. ``sep=None`` detects
         the separator from the first valid row of the file with Python's builtin
-        sniffer tool, ``csv.Sniffer``; it is supported only by the Python parsing
-        engine and must be combined with ``engine='python'`` explicitly.
+        sniffer tool, ``csv.Sniffer``. Sniffing is only implemented by the Python
+        parsing engine, so ``sep=None`` selects that engine automatically and
+        emits a ``ParserWarning`` unless ``engine='python'`` is passed explicitly;
+        pairing ``sep=None`` with a non-Python engine such as ``'c'`` raises a
+        ``ValueError``.
         In addition, separators longer than 1 character and different from
         ``'\\s+'`` will be interpreted as regular expressions and will force
         the use of the Python parsing engine. Note that regex delimiters are prone
@@ -2685,7 +2691,13 @@ class TextFileReader(abc.Iterator):
 
         sep = options["delimiter"]
 
-        if sep is not None and len(sep) > 1:
+        if sep is None and engine not in ("python", "python-fwf"):
+            # sep=None requests automatic separator detection, which is
+            # implemented only by the python engine (via csv.Sniffer), so fall
+            # back to it (or raise if a non-python engine was requested).
+            fallback_reason = f"the '{engine}' engine does not support sep=None"
+            engine = "python"
+        elif sep is not None and len(sep) > 1:
             if engine == "c" and sep == r"\s+":
                 # delim_whitespace passed on to pandas._libs.parsers.TextReader
                 result["delim_whitespace"] = True
