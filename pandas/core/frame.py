@@ -3277,10 +3277,11 @@ class DataFrame(NDFrame, OpsMixin):
         notebook : {True, False}, default False
             Whether the generated HTML is for IPython Notebook.
         border : int or bool
-            When an integer value is provided, it sets the border attribute in
-            the opening tag, specifying the thickness of the border.
-            If ``False`` or ``0`` is passed, the border attribute will not
-            be present in the ``<table>`` tag.
+            When an integer value is provided, it sets the thickness (in pixels)
+            of the CSS border applied to the ``<table>`` and its cells via an
+            inline ``style``. The border color is ``currentColor``, so it
+            adapts to the surrounding text color. If ``False`` or ``0`` is
+            passed, no border is added.
             The default value for this parameter is governed by
             ``pd.options.display.html.border``.
         table_id : str, optional
@@ -3305,24 +3306,24 @@ class DataFrame(NDFrame, OpsMixin):
         >>> df = pd.DataFrame(data={"col1": [1, 2], "col2": [4, 3]})
         >>> html_string = df.to_html()
         >>> print(html_string)
-        <table border="1" class="dataframe">
+        <table style="border: 1px solid;" class="dataframe">
           <thead>
             <tr style="text-align: right;">
-              <th></th>
-              <th>col1</th>
-              <th>col2</th>
+              <th style="border: 1px solid;"></th>
+              <th style="border: 1px solid;">col1</th>
+              <th style="border: 1px solid;">col2</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <th>0</th>
-              <td>1</td>
-              <td>4</td>
+              <th style="border: 1px solid;">0</th>
+              <td style="border: 1px solid;">1</td>
+              <td style="border: 1px solid;">4</td>
             </tr>
             <tr>
-              <th>1</th>
-              <td>2</td>
-              <td>3</td>
+              <th style="border: 1px solid;">1</th>
+              <td style="border: 1px solid;">2</td>
+              <td style="border: 1px solid;">3</td>
             </tr>
           </tbody>
         </table>
@@ -3340,21 +3341,21 @@ class DataFrame(NDFrame, OpsMixin):
         >>> df = pd.DataFrame(data={"col1": [1, 2], "col2": [4, 3]})
         >>> html_string = df.to_html(index=False)
         >>> print(html_string)
-        <table border="1" class="dataframe">
+        <table style="border: 1px solid;" class="dataframe">
           <thead>
             <tr style="text-align: right;">
-              <th>col1</th>
-              <th>col2</th>
+              <th style="border: 1px solid;">col1</th>
+              <th style="border: 1px solid;">col2</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>1</td>
-              <td>4</td>
+              <td style="border: 1px solid;">1</td>
+              <td style="border: 1px solid;">4</td>
             </tr>
             <tr>
-              <td>2</td>
-              <td>3</td>
+              <td style="border: 1px solid;">2</td>
+              <td style="border: 1px solid;">3</td>
             </tr>
           </tbody>
         </table>
