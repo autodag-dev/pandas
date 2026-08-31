@@ -492,6 +492,32 @@ be located.
 
    - tests.extension
 
+.. _contributing.gh_references:
+
+Referencing GitHub issues
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A test written for a specific bug should say which one, as a full URL:
+
+.. code-block:: python
+
+   def test_cool_feature_aspect():
+       # https://github.com/pandas-dev/pandas/issues/1234
+       ...
+
+A pre-commit hook enforces this. Existing tests use a variety of shorthands
+instead (``GH#1234``, ``GH 1234``, ``GH-1234``, ...); those are grandfathered in
+``scripts/gh_reference_baseline.txt`` and do not need converting. If you move a
+file that contains some, carry its entry over with:
+
+.. code-block:: shell
+
+   python scripts/validate_gh_references.py --update-baseline
+
+That command refuses to grow the baseline, so it cannot be used to silence a
+reference you just wrote. Rebasing is the exception -- it can carry shorthands
+over from ``main`` -- and ``--allow-growth`` lets those through.
+
 Using ``pytest``
 ~~~~~~~~~~~~~~~~
 
