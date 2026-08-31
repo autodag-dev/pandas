@@ -233,7 +233,6 @@ numpydoc_validation_exclude = {
     r"pandas\.errors\.PyperclipException$",
     r"pandas\.errors\.PyperclipWindowsException$",
     # Offset .base properties
-    r"pandas\.tseries\.offsets\.BaseOffset\.base$",
     r"pandas\.tseries\.offsets\.DateOffset\.base$",
     r"pandas\.tseries\.offsets\.BusinessDay\.base$",
     r"pandas\.tseries\.offsets\.BusinessHour\.base$",

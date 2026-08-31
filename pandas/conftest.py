@@ -189,7 +189,7 @@ def pytest_collection_modifyitems(items, config) -> None:
         # Docstring divides by zero to show behavior difference
         ("missing.mask_zero_div_zero", "divide by zero encountered"),
         ("Timestamp.utcfromtimestamp", "Timestamp.utcfromtimestamp is deprecated"),
-        ("BaseOffset.name.__get__", "The 'name' property is deprecated"),
+        ("DateOffset.name.__get__", "The 'name' property is deprecated"),
         (
             # matches both DatetimeProperties.freq and TimedeltaProperties.freq
             "Properties.freq",
