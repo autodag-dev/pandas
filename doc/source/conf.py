@@ -232,6 +232,8 @@ numpydoc_validation_exclude = {
     r"pandas\.errors\.IncompatibilityWarning$",
     r"pandas\.errors\.PyperclipException$",
     r"pandas\.errors\.PyperclipWindowsException$",
+    # Typing classes with no numpydoc-style docstrings
+    r"pandas\.api\.typing\.Expression$",
     # Offset .base properties
     r"pandas\.tseries\.offsets\.BaseOffset\.base$",
     r"pandas\.tseries\.offsets\.DateOffset\.base$",
