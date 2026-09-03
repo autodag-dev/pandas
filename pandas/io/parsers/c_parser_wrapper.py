@@ -269,8 +269,15 @@ class CParserWrapper(ParserBase):
         try:
             if self.low_memory:
                 chunks = self._reader.read_low_memory(nrows)
+                # assert for mypy, orig_names is List or None
+                assert self.orig_names is not None
+                # The chunks are keyed by the column's position in the file.
+                # With an implicit index the leading columns hold it and have
+                # no name, so pad to keep the named ones lined up.
+                chunk_names: list[Hashable] = [None] * self._reader.leading_cols
+                chunk_names += self.orig_names
                 # destructive to chunks
-                data = _concatenate_chunks(chunks, self.names)
+                data = _concatenate_chunks(chunks, chunk_names)
             else:
                 data = self._reader.read(nrows)
                 if self.wrap_deferred:
@@ -435,6 +442,15 @@ def _concatenate_chunks(
     column's cross-chunk dtype has already been reconciled by the caller.
     """
     names = list(chunks[0].keys())
+    # The low-memory reader keys each chunk by the column's position in the
+    # file, which is not an index into ``column_names``: ``usecols`` narrows
+    # that list, so a position past its end raised IndexError, and an index
+    # column is dropped from it while still present in the chunks, so the
+    # warning named the wrong column. Pair the two up by sorted key order, the
+    # way ``read`` renames the dict keys (GH#67375). ``strict=False`` because a
+    # caller may pass more names than the chunks hold; a column with no name of
+    # its own falls back to its position.
+    labels = dict(zip(sorted(names), column_names, strict=False))
     warning_columns = []
 
     result: dict = {}
@@ -464,11 +480,21 @@ def _concatenate_chunks(
         else:
             result[name] = concat_compat(arrs)
             if len(non_cat_dtypes) > 1 and result[name].dtype == np.dtype(object):
-                warning_columns.append(column_names[name])
+                # ``None`` marks a column the caller has no name for, such as
+                # the leading columns of an implicit index; those are reported
+                # by position alone.
+                warning_columns.append((name, labels.get(name)))
 
     if warning_columns and warn_mixed:
+        # The number is the column's position in the file, which is what
+        # GH#58174 asked to keep alongside the names it added. Numbering with
+        # enumerate instead made it a count of the warned columns, so it no
+        # longer said anything about where they were (GH#67375).
         warning_names = ", ".join(
-            [f"{index}: {name}" for index, name in enumerate(warning_columns)]
+            [
+                f"{position}: {label}" if label is not None else f"{position}"
+                for position, label in warning_columns
+            ]
         )
         warning_message = " ".join(
             [
