@@ -34,7 +34,7 @@ class TestSeriesConvertDtypes:
             (
                 ["x", "y", "z"],
                 np.dtype("O"),
-                pd.StringDtype(),
+                pd.StringDtype(storage="python"),
                 {("convert_string", False): np.dtype("O")},
             ),
             (
@@ -46,7 +46,7 @@ class TestSeriesConvertDtypes:
             (
                 ["h", "i", np.nan],
                 np.dtype("O"),
-                pd.StringDtype(),
+                pd.StringDtype(storage="python"),
                 {("convert_string", False): np.dtype("O")},
             ),
             (  # GH32117
@@ -311,6 +311,17 @@ class TestSeriesConvertDtypes:
         result = ser.convert_dtypes(dtype_backend="numpy_nullable")
         expected = pd.Series(range(2), dtype="Int32")
         tm.assert_series_equal(result, expected)
+
+    def test_convert_dtypes_numpy_nullable_string_storage(self):
+        # GH#64238 dtype_backend="numpy_nullable" should always give
+        # StringDtype(storage="python"), even when pyarrow is installed and
+        # pd.options.mode.string_storage resolves to "pyarrow"
+        pytest.importorskip("pyarrow")
+        ser = pd.Series(["a", "b", None])
+        result = ser.convert_dtypes(dtype_backend="numpy_nullable")
+        expected = pd.Series(["a", "b", None], dtype=pd.StringDtype(storage="python"))
+        tm.assert_series_equal(result, expected)
+        assert result.dtype.storage == "python"
 
     def test_convert_dtypes_pyarrow_null(self):
         # GH#55346
