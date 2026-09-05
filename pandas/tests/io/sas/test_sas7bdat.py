@@ -710,6 +710,37 @@ def test_column_offset_near_int64_max_raises(datapath, bad_offset):
         pd.read_sas(io.BytesIO(data), format="sas7bdat", encoding=None)
 
 
+@pytest.mark.parametrize("declared", [3, 4096])
+def test_column_count_above_column_attributes_raises(datapath, declared):
+    # GH#68065 a count above the columns the file describes ran off the end of
+    #  those lists as a bare IndexError from the middle of the reader.
+    with open(datapath("io", "sas", "data", "dates_null.sas7bdat"), "rb") as fd:
+        data = bytearray(fd.read())
+    # the count field of the column-size subheader, one word into it
+    struct.pack_into("<q", data, 65536 + 64704 + 8, declared)
+    with pytest.raises(ValueError, match="column-attribute subheaders describe only 2"):
+        pd.read_sas(io.BytesIO(data), format="sas7bdat", encoding=None)
+
+
+def test_column_count_above_column_names_raises(datapath):
+    # GH#68065 the names get their own arm because _chunk_to_dataframe indexes
+    #  them; pre-fix this file raised from the column_formats lookup instead.
+    with open(datapath("io", "sas", "data", "dates_null.sas7bdat"), "rb") as fd:
+        data = bytearray(fd.read())
+    # the page's last subheader pointer is a zero-length placeholder, so
+    #  overwriting it adds a subheader without moving anything else on the page
+    pointer = (
+        65536
+        + const.page_bit_offset_x64
+        + const.subheader_pointers_offset
+        + 9 * const.subheader_pointer_length_x64
+    )
+    struct.pack_into("<qqBB", data, pointer, 63900, 60, 0, 1)
+    struct.pack_into("<q", data, 65536 + 64704 + 8, 4)
+    with pytest.raises(ValueError, match="column-name subheaders describe only 2"):
+        pd.read_sas(io.BytesIO(data), format="sas7bdat", encoding=None)
+
+
 def _dates_null_with_late_metadata_page(
     datapath,
     sub_offset,
