@@ -9,7 +9,9 @@ import pandas as pd
 import pandas._testing as tm
 from pandas.tests.plotting.common import (
     _check_colors,
+    _check_line_colors,
     _check_plot_works,
+    _get_line_collection,
     _unpack_cycler,
 )
 
@@ -337,22 +339,22 @@ class TestDataFrameColor:
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((5, 5)))
 
         ax = df.plot(color=custom_colors)
-        _check_colors(ax.get_lines(), linecolors=custom_colors)
+        _check_line_colors(ax, custom_colors)
 
         plt.close("all")
 
         ax2 = df.plot(color=custom_colors)
-        lines2 = ax2.get_lines()
 
-        for l1, l2 in zip(ax.get_lines(), lines2, strict=True):
-            assert l1.get_color() == l2.get_color()
+        colors1 = _get_line_collection(ax).get_edgecolor()
+        colors2 = _get_line_collection(ax2).get_edgecolor()
+        tm.assert_numpy_array_equal(colors1, colors2)
 
     @pytest.mark.parametrize("colormap", ["jet", cm.jet])
     def test_line_colors_cmap(self, colormap):
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((5, 5)))
         ax = df.plot(colormap=colormap)
         rgba_colors = [cm.jet(n) for n in np.linspace(0, 1, len(df))]
-        _check_colors(ax.get_lines(), linecolors=rgba_colors)
+        _check_line_colors(ax, rgba_colors)
 
     def test_line_colors_single_col(self):
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((5, 5)))
@@ -364,14 +366,14 @@ class TestDataFrameColor:
     def test_line_colors_single_color(self):
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((5, 5)))
         ax = df.plot(color="red")
-        _check_colors(ax.get_lines(), linecolors=["red"] * 5)
+        _check_line_colors(ax, ["red"] * 5)
 
     def test_line_colors_hex(self):
         # GH 10299
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((5, 5)))
         custom_colors = ["#FF0000", "#0000FF", "#FFFF00", "#000000", "#FFFFFF"]
         ax = df.plot(color=custom_colors)
-        _check_colors(ax.get_lines(), linecolors=custom_colors)
+        _check_line_colors(ax, custom_colors)
 
     def test_dont_modify_colors(self):
         colors = ["r", "g", "b"]
@@ -546,7 +548,7 @@ class TestDataFrameColor:
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((5, 5)))
         ax = df.plot.kde(colormap=colormap)
         rgba_colors = [cm.jet(n) for n in np.linspace(0, 1, len(df))]
-        _check_colors(ax.get_lines(), linecolors=rgba_colors)
+        _check_line_colors(ax, rgba_colors)
 
     def test_kde_colors_and_styles_subplots(self):
         pytest.importorskip("scipy")
@@ -689,7 +691,7 @@ class TestDataFrameColor:
         ax = df.plot()
 
         expected = _unpack_cycler(plt.rcParams)[:3]
-        _check_colors(ax.get_lines(), linecolors=expected)
+        _check_line_colors(ax, expected)
 
     def test_no_color_bar(self):
         df = pd.DataFrame(
@@ -735,8 +737,9 @@ class TestDataFrameColor:
         result = df_concat.plot()
         legend = result.get_legend()
         handles = legend.legend_handles
-        for legend, line in zip(handles, result.lines, strict=True):
-            assert legend.get_color() == line.get_color()
+        edgecolors = _get_line_collection(result).get_edgecolor()
+        for handle, color in zip(handles, edgecolors, strict=True):
+            assert mpl.colors.to_rgba(handle.get_color()) == tuple(color)
 
     def test_invalid_colormap(self):
         df = pd.DataFrame(
@@ -751,4 +754,4 @@ class TestDataFrameColor:
         df = pd.DataFrame([[1, 2, 3]])
         ax = df.plot(color=None)
         expected = _unpack_cycler(mpl.pyplot.rcParams)[:3]
-        _check_colors(ax.get_lines(), linecolors=expected)
+        _check_line_colors(ax, expected)

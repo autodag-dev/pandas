@@ -26,10 +26,13 @@ from pandas.tests.plotting.common import (
     _check_grid_settings,
     _check_has_errorbars,
     _check_legend_labels,
+    _check_line_colors,
     _check_plot_works,
     _check_text_labels,
     _check_ticks_props,
     _check_visible,
+    _get_line_xydata,
+    _get_line_ydata,
     get_y_axis,
 )
 
@@ -492,12 +495,11 @@ class TestDataFramePlots:
         with pytest.raises(ValueError, match=msg):
             df.plot.area(loglog=True)
 
-    def _compare_stacked_y_cood(self, normal_lines, stacked_lines):
-        base = np.zeros(len(normal_lines[0].get_data()[1]))
-        for nl, sl in zip(normal_lines, stacked_lines, strict=True):
-            base += nl.get_data()[1]  # get y coordinates
-            sy = sl.get_data()[1]
-            tm.assert_numpy_array_equal(base, sy)
+    def _compare_stacked_y_cood(self, normal_ydata, stacked_ydata):
+        base = np.zeros(len(normal_ydata[0]))
+        for normal, stacked in zip(normal_ydata, stacked_ydata, strict=True):
+            base += normal
+            tm.assert_numpy_array_equal(base, stacked)
 
     @pytest.mark.parametrize("kind", ["line", "area"])
     @pytest.mark.parametrize("mult", [1, -1])
@@ -508,7 +510,7 @@ class TestDataFramePlots:
 
         ax1 = _check_plot_works(df.plot, kind=kind, stacked=False)
         ax2 = _check_plot_works(df.plot, kind=kind, stacked=True)
-        self._compare_stacked_y_cood(ax1.lines, ax2.lines)
+        self._compare_stacked_y_cood(_get_line_ydata(ax1), _get_line_ydata(ax2))
 
     @pytest.mark.parametrize("kind", ["line", "area"])
     def test_line_area_stacked_sep_df(self, kind):
@@ -523,8 +525,9 @@ class TestDataFramePlots:
         )
         ax1 = _check_plot_works(sep_df.plot, kind=kind, stacked=False)
         ax2 = _check_plot_works(sep_df.plot, kind=kind, stacked=True)
-        self._compare_stacked_y_cood(ax1.lines[:2], ax2.lines[:2])
-        self._compare_stacked_y_cood(ax1.lines[2:], ax2.lines[2:])
+        ydata1, ydata2 = _get_line_ydata(ax1), _get_line_ydata(ax2)
+        self._compare_stacked_y_cood(ydata1[:2], ydata2[:2])
+        self._compare_stacked_y_cood(ydata1[2:], ydata2[2:])
 
     def test_line_area_stacked_mixed(self):
         mixed_df = pd.DataFrame(
@@ -561,17 +564,22 @@ class TestDataFramePlots:
         df = pd.DataFrame({"a": values1, "b": values2}, index=idx)
 
         ax = _check_plot_works(df.plot)
-        masked1 = ax.lines[0].get_ydata()
-        masked2 = ax.lines[1].get_ydata()
-        # remove nan for comparison purpose
+        ydata1, ydata2 = _get_line_ydata(ax)
+        # the NaN is kept as a gap in the drawn data, however it is represented
+        ydata1 = np.ma.filled(np.asarray(ydata1, dtype="float64"), np.nan)
+        ydata2 = np.ma.filled(np.asarray(ydata2, dtype="float64"), np.nan)
 
         exp = np.array([1, 2, 3], dtype=np.float64)
-        tm.assert_numpy_array_equal(np.delete(masked1.data, 2), exp)
+        tm.assert_numpy_array_equal(np.delete(ydata1, 2), exp)
 
         exp = np.array([3, 2, 1], dtype=np.float64)
-        tm.assert_numpy_array_equal(np.delete(masked2.data, 1), exp)
-        tm.assert_numpy_array_equal(masked1.mask, np.array([False, False, True, False]))
-        tm.assert_numpy_array_equal(masked2.mask, np.array([False, True, False, False]))
+        tm.assert_numpy_array_equal(np.delete(ydata2, 1), exp)
+        tm.assert_numpy_array_equal(
+            np.isnan(ydata1), np.array([False, False, True, False])
+        )
+        tm.assert_numpy_array_equal(
+            np.isnan(ydata2), np.array([False, True, False, False])
+        )
 
     @pytest.mark.parametrize(
         "idx", [range(4), pd.date_range("2023-01-1", freq="D", periods=4)]
@@ -618,9 +626,9 @@ class TestDataFramePlots:
         )
         ax = df.plot(**kwargs)
         xmin, xmax = ax.get_xlim()
-        lines = ax.get_lines()
-        assert xmin <= lines[0].get_data()[0][0]
-        assert xmax >= lines[0].get_data()[0][-1]
+        xdata = _get_line_xydata(ax)[0][:, 0]
+        assert xmin <= xdata[0]
+        assert xmax >= xdata[-1]
 
     def test_line_lim_subplots(self):
         df = pd.DataFrame(
@@ -1591,8 +1599,8 @@ class TestDataFramePlots:
         _check_plot_works(df.plot, x="A", y=y, label=lbl)
 
         ax = df.plot(x=x, y=y, label=lbl, color=colors)
-        assert len(ax.lines) == len(y)
-        _check_colors(ax.get_lines(), linecolors=colors)
+        assert len(_get_line_xydata(ax)) == len(y)
+        _check_line_colors(ax, colors)
 
     @pytest.mark.parametrize("x,y,colnames", [(0, 1, ["A", "B"]), (1, 0, [0, 1])])
     def test_xy_args_integer(self, x, y, colnames):
