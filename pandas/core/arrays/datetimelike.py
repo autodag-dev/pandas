@@ -2396,6 +2396,7 @@ class TimelikeOps(DatetimeLikeArrayMixin):
         limit_direction,
         limit_area,
         copy: bool,
+        limit_behavior: Literal["fill", "skip"] = "fill",
         **kwargs,
     ) -> Self:
         """
@@ -2418,6 +2419,7 @@ class TimelikeOps(DatetimeLikeArrayMixin):
             limit=limit,
             limit_direction=limit_direction,
             limit_area=limit_area,
+            limit_behavior=limit_behavior,
             **kwargs,
         )
         if not copy:

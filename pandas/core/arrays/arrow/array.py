@@ -3175,6 +3175,7 @@ class ArrowExtensionArray(
         limit_direction,
         limit_area,
         copy: bool,
+        limit_behavior: Literal["fill", "skip"] = "fill",
         **kwargs,
     ) -> Self:
         """
@@ -3216,6 +3217,7 @@ class ArrowExtensionArray(
             limit_direction=limit_direction,
             limit_area=limit_area,
             mask=mask,
+            limit_behavior=limit_behavior,
             **kwargs,
         )
         return self._from_pyarrow_array(self._box_pa_array(pa.array(data, mask=mask)))
