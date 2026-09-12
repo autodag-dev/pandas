@@ -75,9 +75,13 @@ Top-level evaluation
    :toctree: api/
 
    col
-   api.typing.Expression
-   api.typing.Expression.case_when
    eval
+
+.. autosummary::
+   :toctree: api/
+   :template: autosummary/class_without_autosummary.rst
+
+   api.typing.Expression
 
 Datetime formats
 ~~~~~~~~~~~~~~~~

@@ -85,7 +85,7 @@ class Expression:
     Expressions are initially created via ``pd.col`` and can be composed
     using arithmetic, comparison, and any method or attribute that the
     underlying object supports. This includes NumPy ufuncs, indexing, and
-    the logical operators ``&``, ``|``, and ``~``.
+    the boolean operators ``&``, ``|``, and ``~``.
 
     Expressions are solely intended for use in expression-based APIs, such
     as :meth:`DataFrame.assign <pandas.DataFrame.assign>` and
@@ -93,6 +93,10 @@ class Expression:
     evaluated against the DataFrame they are passed to.
 
     This is not meant to be instantiated directly. Instead, use :meth:`pandas.col`.
+
+    See Also
+    --------
+    pandas.col : Create a deferred column reference.
 
     Notes
     -----
@@ -349,39 +353,14 @@ class Expression:
 
     def case_when(self, caselist: Sequence[tuple[Any, Any]]) -> Expression:
         """
-        Evaluate :meth:`Series.case_when <pandas.Series.case_when>`.
+        Create an expression that evaluates :meth:`Series.case_when` in a DataFrame
+        context.
 
-        This enables patterns like::
+        This is intended to enable patterns like::
 
             df.assign(result=pd.col("a").case_when([(pd.col("b") > 0, 1)]))
 
-        where conditions and replacements may reference other columns via
-        ``pd.col``.
-
-        Parameters
-        ----------
-        caselist : list of tuple
-            List of ``(condition, replacement)`` pairs. Conditions and
-            replacements may themselves be expressions.
-
-        Returns
-        -------
-        :class:`pandas.api.typing.Expression`
-            A deferred expression that evaluates
-            :meth:`Series.case_when <pandas.Series.case_when>` on
-            the column when applied to a DataFrame.
-
-        See Also
-        --------
-        Series.case_when : Replace values where the conditions are True.
-
-        Examples
-        --------
-        >>> df = pd.DataFrame({"a": [1, 2], "b": [-1, 3]})
-        >>> df.assign(c=pd.col("a").case_when([(pd.col("b") > 0, pd.col("b"))]))
-           a  b  c
-        0  1 -1  1
-        1  2  3  3
+        where conditions/replacements may reference other columns via ``pd.col``.
         """
 
         def func(df: DataFrame) -> Any:
