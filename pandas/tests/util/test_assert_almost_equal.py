@@ -253,6 +253,25 @@ def test_assert_almost_equal_nested_arrays_check_dtype():
     _assert_almost_equal_both(left, right, check_dtype=False)
 
 
+def test_assert_almost_equal_2d_large_mixed_integer_float():
+    # GH#68366 the GH#66699 magnitude guard sends exactly-equal large integers
+    #  through the element loop, which must honour check_dtype like the 1-D case
+    big = np.array([[2**60, 1], [2, 3]], dtype="int64")
+
+    _assert_almost_equal_both(
+        big, big.astype("float64"), check_dtype=False, rtol=0, atol=0
+    )
+
+
+def test_assert_almost_equal_nested_arrays_check_dtype():
+    # GH#68366 the element loop forwards check_dtype, so nested arrays compare
+    #  by value rather than tripping on their dtypes
+    left = [np.array([1, 2]), np.array([3, 4])]
+    right = [np.array([1.0, 2.0]), np.array([3.0, 4.0])]
+
+    _assert_almost_equal_both(left, right, check_dtype=False)
+
+
 @pytest.mark.parametrize(
     "a,b,rtol",
     [
