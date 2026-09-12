@@ -4966,6 +4966,37 @@ class Table(Fixed):
         # Because we are always 2D, there is only one new_index, so
         #  we know it will have pos=0
         new_index.set_pos(0)
+
+        if table_exists and new_index.kind == existing_index_col.kind == "integer":
+            # A PeriodIndex is stored as its i8 ordinals with kind "integer", so
+            # freq is the only thing separating it from a plain integer index.
+            # Check it before update_info silently overwrites the stored freq,
+            # which would reinterpret the rows already stored. GH#68523
+            existing_freq = new_info.get(new_index.name, {}).get("freq")
+            if existing_freq != new_index.freq:
+                if existing_freq is None:
+                    raise TypeError(
+                        "cannot append a period index to a non-period index"
+                    )
+                if new_index.freq is None:
+                    raise TypeError(
+                        "cannot append a non-period index to a period index"
+                    )
+                # PeriodDtype's alias ("M"), not the offset's datetime alias
+                # ("ME"), which Period itself rejects. Same alias and warning
+                # filter as raise_on_incompatible.
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        r"PeriodDtype\[B\] is deprecated",
+                        category=FutureWarning,
+                    )
+                    existing_str = PeriodDtype(existing_freq)._freqstr
+                    new_str = PeriodDtype(new_index.freq)._freqstr
+                raise TypeError(
+                    f"incompatible freq in col [{existing_str} - {new_str}]"
+                )
+
         new_index.update_info(new_info)
         new_index.maybe_set_size(min_itemsize)  # check for column conflicts
 
