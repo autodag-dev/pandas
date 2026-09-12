@@ -440,6 +440,7 @@ def col(col_name: Hashable) -> Expression:
     See Also
     --------
     DataFrame.query : Query columns of a dataframe using string expressions.
+    DataFrame.select : Select a subset of columns from the DataFrame.
 
     Examples
     --------

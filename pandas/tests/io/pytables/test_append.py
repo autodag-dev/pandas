@@ -122,7 +122,7 @@ def test_append_series(temp_hdfstore):
     mi["B"] = np.arange(len(mi))
     mi["C"] = "foo"
     mi.loc[3:5, "C"] = "bar"
-    mi.set_index(["C", "B"], inplace=True)
+    mi = mi.set_index(["C", "B"])
     s = mi.stack()
     s.index = s.index.droplevel(2)
     temp_hdfstore.append("mi", s)
@@ -262,7 +262,7 @@ def test_append_with_different_block_ordering(temp_hdfstore):
             a = df.pop("A")
             df["A"] = a
 
-        df.set_index("index", inplace=True)
+        df = df.set_index("index")
 
         temp_hdfstore.append("df", df)
 
@@ -742,6 +742,17 @@ because its data contents are not [string] but [mixed] object dtype"""
     df["invalid3"] = [["a"]] * len(df)
     with pytest.raises(TypeError, match=msg):
         temp_hdfstore.append("df", df)
+
+    # GH#9604 — an unhashable element alongside a missing value must still get
+    # this message: choosing the column's NaN sentinel looks at its values first
+    for label, value in [("unhashable", ["a"]), ("array", np.array([1, 2]))]:
+        df = pd.DataFrame({label: [value, np.nan]})
+        msg2 = re.escape(
+            f"""Cannot serialize the column [{label}]
+because its data contents are not [string] but [mixed] object dtype"""
+        )
+        with pytest.raises(TypeError, match=msg2):
+            temp_hdfstore.append(f"df_{label}", df)
 
     # datetime with embedded nans as object
     df = pd.DataFrame(
