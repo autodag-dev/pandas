@@ -38,6 +38,8 @@ from pandas._libs.tslibs import (
     Period,
     Timedelta,
     Timestamp,
+    is_supported_dtype,
+    is_unitless,
     timezones,
     to_offset,
     tz_compare,
@@ -1734,7 +1736,9 @@ class SparseDtype(ExtensionDtype):
     ``SparseDtype`` is used as the data type for :class:`SparseArray`, enabling
     more efficient storage of data that contains a significant number of
     repetitive values typically represented by a fill value. It supports any
-    scalar dtype as the underlying data type of the non-fill values.
+    scalar dtype as the underlying data type of the non-fill values, except
+    that a datetime64 or timedelta64 subtype is limited to the ``'s'``,
+    ``'ms'``, ``'us'`` and ``'ns'`` resolutions.
 
     Parameters
     ----------
@@ -1808,6 +1812,19 @@ class SparseDtype(ExtensionDtype):
         if not isinstance(dtype, np.dtype):
             # GH#53160
             raise TypeError("SparseDtype subtype must be a numpy dtype")
+        if dtype.kind in "mM" and not is_supported_dtype(dtype):
+            # GH#68522 hold the subtype to what the dense constructors accept.
+            #  Their own check is cast._ensure_nanosecond_dtype, which this
+            #  module cannot import; keep the messages identical.
+            if is_unitless(dtype):
+                raise ValueError(
+                    f"The '{dtype.name}' dtype has no unit. "
+                    f"Please pass in '{dtype.name}[ns]' instead."
+                )
+            raise TypeError(
+                f"dtype={dtype} is not supported. Supported resolutions are 's', "
+                "'ms', 'us', and 'ns'"
+            )
 
         if fill_value is None:
             fill_value = na_value_for_dtype(dtype)

@@ -249,3 +249,35 @@ def test_sparse_dtype_subtype_must_be_numpy_dtype():
     msg = "SparseDtype subtype must be a numpy dtype"
     with pytest.raises(TypeError, match=msg):
         pd.SparseDtype("category", fill_value="c")
+
+
+@pytest.mark.parametrize("kind", ["M", "m"])
+@pytest.mark.parametrize("unit", ["10s", "Y", "D", "ps"])
+def test_subtype_unsupported_resolution_raises(kind, unit):
+    # GH#68522 hold the subtype to what the dense constructors accept
+    dtype = f"{kind}8[{unit}]"
+    msg = f"dtype={np.dtype(dtype)} is not supported. Supported resolutions are"
+
+    with pytest.raises(TypeError, match=re.escape(msg)):
+        pd.SparseDtype(dtype)
+    with pytest.raises(TypeError, match=re.escape(msg)):
+        pd.SparseDtype.construct_from_string(f"Sparse[{dtype}]")
+
+
+@pytest.mark.parametrize("kind", ["M", "m"])
+def test_unsupported_subtype_string_loses_its_message(kind):
+    # registry.find cannot tell "not a Sparse string" from "invalid subtype", so
+    #  the resolution message does not survive the route a user actually takes.
+    #  Delete this test once registry.find stops swallowing the TypeError.
+    with pytest.raises(TypeError, match="not understood"):
+        pd.Series([1, 2], dtype=f"Sparse[{kind}8[D]]")
+
+
+@pytest.mark.parametrize("kind", ["M", "m"])
+def test_subtype_unitless_raises(kind):
+    # GH#68522
+    name = "datetime64" if kind == "M" else "timedelta64"
+    msg = f"The '{name}' dtype has no unit. Please pass in '{name}[ns]' instead."
+
+    with pytest.raises(ValueError, match=re.escape(msg)):
+        pd.SparseDtype(name)
