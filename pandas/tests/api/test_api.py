@@ -597,13 +597,17 @@ def test_lazy_imports():
 def test_lazy_imports_read_csv():
     # pd.read_csv must only load pandas.io.parsers, not sibling backends
     code = (
-        "import pandas as pd, sys; "
-        "from io import StringIO; "
-        "pd.read_csv(StringIO('a,b\\n1,2')); "
-        "assert 'pandas.io.parsers' in sys.modules; "
-        "for m in ('pandas.io.excel', 'pandas.io.parquet', 'pandas.io.sql', "
-        "          'pandas.io.pytables', 'pandas.io.stata', 'pandas.io.sas', "
-        "          'pandas.io.xml'): "
-        "    assert m not in sys.modules, m"
+        "import pandas as pd, sys\n"
+        "from io import StringIO\n"
+        "pd.read_csv(StringIO('a,b\\n1,2'))\n"
+        "assert 'pandas.io.parsers' in sys.modules\n"
+        "siblings = ('pandas.io.excel', 'pandas.io.parquet', 'pandas.io.sql',\n"
+        "            'pandas.io.pytables', 'pandas.io.stata', 'pandas.io.sas',\n"
+        "            'pandas.io.xml')\n"
+        "loaded = [m for m in siblings if m in sys.modules]\n"
+        "assert not loaded, f'unexpectedly loaded: {loaded}'\n"
     )
-    subprocess.check_call([sys.executable, "-c", code])
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
