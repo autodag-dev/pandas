@@ -32,6 +32,7 @@ from pandas._libs.tslibs import (
     NaT,
     Timedelta,
     Timestamp,
+    is_supported_dtype,
 )
 from pandas.compat import PYPY
 from pandas.compat.numpy import function as nv
@@ -534,6 +535,11 @@ class SparseArray(OpsMixin, PandasObject, ExtensionArray):
                 data = np.atleast_1d(np.asarray(data, dtype=dtype))
             else:
                 raise
+
+        if lib.is_np_dtype(data.dtype, "mM") and not is_supported_dtype(data.dtype):
+            # GH#68522 cast to a resolution we can hold, and reject a multiplier
+            #  unit, the way the dense constructors do
+            data = np.asarray(ensure_wrapped_if_datetimelike(data))
 
         if copy:
             # TODO: avoid double copy when dtype forces cast.
