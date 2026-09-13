@@ -1141,6 +1141,7 @@ Reshaping
 
 Sparse
 ^^^^^^
+- Bug in :attr:`DataFrame.sparse.density` emitting ``RuntimeWarning`` for a :class:`DataFrame` with no columns (:issue:`68564`)
 - Bug in :attr:`Series.sparse.density`, :attr:`DataFrame.sparse.density`, and :attr:`SparseArray.density` raising ``ZeroDivisionError`` on empty data instead of returning ``nan`` (:issue:`68468`)
 - Bug in :class:`SparseArray` and :class:`SparseDtype` accepting ``datetime64`` and ``timedelta64`` units pandas cannot hold: an unsupported resolution in the data is now cast to a supported one and an unsupported ``dtype=`` now raises, both matching the dense constructors, where previously a multiplier unit such as ``M8[10s]`` built a column that could not be displayed (:issue:`68522`)
 - Bug in :class:`SparseArray` with a datetime64 or timedelta64 subtype where a ``pd.NaT`` ``fill_value`` raised ``TypeError`` from :meth:`SparseArray.to_dense`, :meth:`SparseArray.unique`, :meth:`SparseArray.astype`, :meth:`SparseArray.take`, and arithmetic and comparison operations, and made ``np.asarray`` on a timedelta64 subtype return ``object`` dtype; all of these behaved correctly for an equivalent ``np.datetime64("NaT")`` fill value (:issue:`68449`)
