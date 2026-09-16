@@ -1124,7 +1124,6 @@ class ArrowExtensionArray(
                 if (pa.types.is_timestamp(ltype) and pa.types.is_date(rtype)) or (
                     pa.types.is_timestamp(rtype) and pa.types.is_date(ltype)
                 ):
-                    # GH#62157 match non-pyarrow behavior
                     result = ops.invalid_comparison(self, other, op)
                     result = pa.array(result, type=pa.bool_())
                 else:
@@ -1138,9 +1137,11 @@ class ArrowExtensionArray(
             if (isinstance(other, datetime) and pa.types.is_date(ltype)) or (
                 type(other) is date and pa.types.is_timestamp(ltype)
             ):
-                # GH#62157 match non-pyarrow behavior
-                result = ops.invalid_comparison(self, other, op)
-                result = pa.array(result, type=pa.bool_())
+                # GH#62157 match non-pyarrow behavior stop cross-type comparison
+                raise TypeError(
+                    f"Invalid comparison between dtype={self.dtype} "
+                    f"and {type(other).__name__}"
+                )
             else:
                 try:
                     result = pc_func(self._pa_array, self._box_pa(other))
