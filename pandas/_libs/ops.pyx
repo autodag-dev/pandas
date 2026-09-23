@@ -74,7 +74,9 @@ def scalar_compare(ndarray[object] values, object val, object op) -> ndarray:
     if flag == Py_NE:
         for i in range(n):
             x = values[i]
-            if checknull(x):
+            if x is None and val is None:
+                result[i] = False
+            elif checknull(x):
                 result[i] = True
             elif isnull_val:
                 result[i] = True
@@ -86,7 +88,9 @@ def scalar_compare(ndarray[object] values, object val, object op) -> ndarray:
     elif flag == Py_EQ:
         for i in range(n):
             x = values[i]
-            if checknull(x):
+            if x is None and val is None:
+                result[i] = True
+            elif checknull(x):
                 result[i] = False
             elif isnull_val:
                 result[i] = False
@@ -99,7 +103,9 @@ def scalar_compare(ndarray[object] values, object val, object op) -> ndarray:
     else:
         for i in range(n):
             x = values[i]
-            if checknull(x):
+            if x is None and val is None:
+                result[i] = False
+            elif checknull(x):
                 result[i] = False
             elif isnull_val:
                 result[i] = False
@@ -158,7 +164,9 @@ def vec_compare(ndarray[object] left, ndarray[object] right, object op) -> ndarr
             x = left[i]
             y = right[i]
 
-            if checknull(x) or checknull(y):
+            if x is None and y is None:
+                result[i] = False
+            elif checknull(x) or checknull(y):
                 result[i] = True
             else:
                 result[i] = PyObject_RichCompareBool(x, y, flag)
@@ -167,7 +175,12 @@ def vec_compare(ndarray[object] left, ndarray[object] right, object op) -> ndarr
             x = left[i]
             y = right[i]
 
-            if checknull(x) or checknull(y):
+            if x is None and y is None:
+                if flag == Py_EQ:
+                    result[i] = True
+                else:
+                    result[i] = False
+            elif checknull(x) or checknull(y):
                 result[i] = False
             else:
                 result[i] = PyObject_RichCompareBool(x, y, flag)

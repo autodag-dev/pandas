@@ -451,9 +451,13 @@ def test_comparison_methods_array(comparison_op, any_string_dtype, any_string_dt
     ):
         if operator.ne == comparison_op:
             expected = np.array([True, True, False])
+            if dtype == object and dtype2 == object:
+                expected[1] = False
         else:
             expected = np.array([False, False, False])
             expected[-1] = getattr(other[-1], op_name)(a[-1])
+            if dtype == object and dtype2 == object and comparison_op == operator.eq:
+                expected[1] = True
         result = extract_array(result, extract_numpy=True)
         tm.assert_numpy_array_equal(result, expected)
 
@@ -498,7 +502,9 @@ def test_comparison_methods_array_arrow_extension(comparison_op, any_string_dtyp
 
 
 @pytest.mark.parametrize("box", [pd.array, pd.Index, pd.Series])
-def test_comparison_methods_list(comparison_op, any_string_dtype, box, request):
+def test_comparison_methods_list(
+    comparison_op, any_string_dtype, box, request, using_infer_string
+):
     dtype = any_string_dtype
 
     if box is pd.array and dtype != object and dtype.na_value is np.nan:
@@ -521,9 +527,17 @@ def test_comparison_methods_list(comparison_op, any_string_dtype, box, request):
     if dtype == np.dtype(object) or dtype.na_value is np.nan:
         if operator.ne == comparison_op:
             expected = np.array([True, True, False])
+            if dtype == np.dtype(object) and not using_infer_string:
+                expected[1] = False
         else:
             expected = np.array([False, False, False])
             expected[-1] = getattr(item, op_name)(item)
+            if (
+                dtype == np.dtype(object)
+                and not using_infer_string
+                and comparison_op == operator.eq
+            ):
+                expected[1] = True
         if box is not pd.Index:
             # if GH#62766 is addressed this check can be removed
             expected = box(expected, dtype=expected.dtype)

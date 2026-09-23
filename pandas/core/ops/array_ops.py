@@ -346,7 +346,9 @@ def comparison_op(left: ArrayLike, right: Any, op) -> ArrayLike:
     # TODO: but not pd.NA?
     elif (is_scalar(rvalues) or rvalues_is_zerodim) and isna(rvalues):
         # numpy does not like comparisons vs None
-        if op is operator.ne:
+        if rvalues is None and getattr(lvalues, "dtype", None) == object:
+            res_values = comp_method_OBJECT_ARRAY(op, lvalues, rvalues)
+        elif op is operator.ne:
             res_values = np.ones(lvalues.shape, dtype=bool)
         else:
             res_values = np.zeros(lvalues.shape, dtype=bool)
