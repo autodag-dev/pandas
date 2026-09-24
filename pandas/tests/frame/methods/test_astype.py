@@ -134,7 +134,7 @@ class TestAstype:
         # see GH#9757
         a = pd.Series(pd.date_range("2010-01-04", periods=5))
         b = pd.Series(pd.date_range("3/6/2012 00:00", periods=5, tz="US/Eastern"))
-        c = pd.Series([pd.Timedelta(x, unit="D") for x in range(5)])
+        c = pd.Series([pd.Timedelta(x, input_unit="D") for x in range(5)])
         d = pd.Series(range(5))
         e = pd.Series([0.0, 0.2, 0.4, 0.6, 0.8])
 
@@ -425,9 +425,9 @@ class TestAstype:
         assert (result.dtypes == object).all()
 
         if dtype.startswith("M8"):
-            assert result.iloc[0, 0] == pd.Timestamp(1, unit=unit)
+            assert result.iloc[0, 0] == pd.Timestamp(1, input_unit=unit)
         else:
-            assert result.iloc[0, 0] == pd.Timedelta(1, unit=unit)
+            assert result.iloc[0, 0] == pd.Timedelta(1, input_unit=unit)
 
     @pytest.mark.parametrize("dtype", ["M8", "m8"])
     @pytest.mark.parametrize("unit", ["ns", "us", "ms", "s", "h", "m", "D"])

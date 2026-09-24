@@ -152,7 +152,7 @@ def cast_from_unit_vectorized(
             #  but not clear what 2.5 "M" corresponds to, so we will
             #  disallow that case.
             raise ValueError(
-                f"Conversion of non-round float with unit={unit} "
+                f"Conversion of non-round float with input_unit={unit} "
                 "is ambiguous"
             )
         _raise_if_outside_int64(values, nan_mask, unit)
@@ -258,7 +258,7 @@ cdef int64_t cast_from_unit(
             #  but not clear what 2.5 "M" corresponds to, so we will
             #  disallow that case.
             raise ValueError(
-                f"Conversion of non-round float with unit={unit} "
+                f"Conversion of non-round float with input_unit={unit} "
                 "is ambiguous"
             )
         # GH#47266 go through np.datetime64 to avoid weird results e.g. with "Y"

@@ -114,7 +114,7 @@ class TestAstype:
         pointwise = [
             vals[0].tz_localize(tz),
             pd.Timestamp(vals[1], tz=tz),
-            pd.to_datetime(vals[2], unit="us", utc=True).tz_convert(tz),
+            pd.to_datetime(vals[2], input_unit="us", utc=True).tz_convert(tz),
         ]
         exp_vals = [x.as_unit("us").asm8 for x in pointwise]
         exp_arr = np.array(exp_vals, dtype="M8[us]")
@@ -301,7 +301,7 @@ class TestAstype:
     def test_astype_str_cast_td64(self):
         # see GH#9757
 
-        td = pd.Series([pd.Timedelta(1, unit="D")])
+        td = pd.Series([pd.Timedelta(1, input_unit="D")])
         ser = td.astype(str)
 
         expected = pd.Series(["1 days"], dtype="str")
@@ -755,8 +755,8 @@ def test_astype_object_numeric_to_timedelta64_unit(unit):
 @pytest.mark.parametrize(
     "values",
     [
-        [pd.Timedelta(1, "s"), "2 sec", np.timedelta64(3, "s")],
-        [4, pd.Timedelta(5, "s")],
+        [pd.Timedelta(1, input_unit="s"), "2 sec", np.timedelta64(3, "s")],
+        [4, pd.Timedelta(5, input_unit="s")],
         ["6 sec", 7],
     ],
 )

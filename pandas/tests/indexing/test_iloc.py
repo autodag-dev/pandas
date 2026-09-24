@@ -2025,10 +2025,10 @@ def test_iloc_setitem_single_column_key_1d_value_datetimelike():
     #  surfaced it as OutOfBoundsDatetime from the upcast fallback
     df = pd.DataFrame(np.zeros((4, 3)), columns=list("abc")).astype("M8[ns]")
 
-    df.iloc[[0, 1, 2], [1]] = pd.to_datetime([1, 2, 3], unit="ns")
+    df.iloc[[0, 1, 2], [1]] = pd.to_datetime([1, 2, 3], input_unit="ns")
 
     expected = pd.DataFrame(np.zeros((4, 3)), columns=list("abc")).astype("M8[ns]")
-    expected["b"] = pd.to_datetime([1, 2, 3, 0], unit="ns")
+    expected["b"] = pd.to_datetime([1, 2, 3, 0], input_unit="ns")
     tm.assert_frame_equal(df, expected)
 
 

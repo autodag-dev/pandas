@@ -806,9 +806,9 @@ class TestLocBaseIndependent:
             {"date": [1485264372711, 1485265925110, 1540215845888, 1540282121025]}
         )
 
-        df["date_dt"] = pd.to_datetime(df["date"], unit="ms", cache=True).dt.as_unit(
-            "us"
-        )
+        df["date_dt"] = pd.to_datetime(
+            df["date"], input_unit="ms", cache=True
+        ).dt.as_unit("us")
 
         df.loc[:, "date_dt_cp"] = df.loc[:, "date_dt"]
         df.loc[[2, 3], "date_dt_cp"] = df.loc[[2, 3], "date_dt"]
@@ -1524,7 +1524,7 @@ class TestLocBaseIndependent:
     )
     def test_loc_setitem_listlike_with_timedelta64index(self, indexer, expected):
         # GH#16637
-        tdi = pd.to_timedelta(range(10), unit="s")
+        tdi = pd.to_timedelta(range(10), input_unit="s")
         df = pd.DataFrame({"x": range(10)}, dtype="int64", index=tdi)
 
         df.loc[df.index[indexer], "x"] = 20
@@ -2548,7 +2548,7 @@ class TestLocSetitemWithExpansion:
                 pd.to_datetime(["2020-01-01", "2020-01-02"]),
                 pd.Timestamp("2020-01-03"),
             ),
-            (pd.to_timedelta([1, 2], unit="D"), pd.Timedelta(days=3)),
+            (pd.to_timedelta([1, 2], input_unit="D"), pd.Timedelta(days=3)),
         ],
     )
     def test_loc_setitem_with_expansion_datetimelike_retains_dtype(
@@ -2841,7 +2841,9 @@ class TestPartialStringSlicing:
 
     def test_loc_getitem_str_timedeltaindex(self):
         # GH#16896
-        df = pd.DataFrame({"x": range(3)}, index=pd.to_timedelta(range(3), unit="days"))
+        df = pd.DataFrame(
+            {"x": range(3)}, index=pd.to_timedelta(range(3), input_unit="days")
+        )
         expected = df.iloc[0]
         sliced = df.loc["0 days"]
         tm.assert_series_equal(sliced, expected)
@@ -3048,7 +3050,7 @@ class TestLocBooleanMask:
     def test_loc_setitem_bool_mask_timedeltaindex(self):
         # GH#14946
         df = pd.DataFrame({"x": range(10)})
-        df.index = pd.to_timedelta(range(10), unit="s")
+        df.index = pd.to_timedelta(range(10), input_unit="s")
         conditions = [df["x"] > 3, df["x"] == 3, df["x"] < 3]
         expected_data = [
             [0, 1, 2, 3, 10, 10, 10, 10, 10, 10],
@@ -3061,7 +3063,7 @@ class TestLocBooleanMask:
 
             expected = pd.DataFrame(
                 data,
-                index=pd.to_timedelta(range(10), unit="s"),
+                index=pd.to_timedelta(range(10), input_unit="s"),
                 columns=["x"],
                 dtype="int64",
             )
@@ -3870,10 +3872,12 @@ class TestLocSeries:
     def test_loc_setitem_dict_timedelta_multiple_set(self):
         # GH 16309
         result = pd.DataFrame(columns=["time", "value"])
-        result.loc[1] = {"time": pd.Timedelta(6, unit="s"), "value": "foo"}
-        result.loc[1] = {"time": pd.Timedelta(6, unit="s"), "value": "foo"}
+        result.loc[1] = {"time": pd.Timedelta(6, input_unit="s"), "value": "foo"}
+        result.loc[1] = {"time": pd.Timedelta(6, input_unit="s"), "value": "foo"}
         expected = pd.DataFrame(
-            [[pd.Timedelta(6, unit="s"), "foo"]], columns=["time", "value"], index=[1]
+            [[pd.Timedelta(6, input_unit="s"), "foo"]],
+            columns=["time", "value"],
+            index=[1],
         )
         tm.assert_frame_equal(result, expected)
 

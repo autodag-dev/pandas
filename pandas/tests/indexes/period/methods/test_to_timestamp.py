@@ -100,7 +100,11 @@ class TestToTimestamp:
         expected = pd.DatetimeIndex(
             ["2011-02-28", "NaT", "2011-03-31"], dtype="M8[us]", name="idx"
         )
-        expected = expected + pd.Timedelta(1, "D") - pd.Timedelta(1, "us")
+        expected = (
+            expected
+            + pd.Timedelta(1, input_unit="D")
+            - pd.Timedelta(1, input_unit="us")
+        )
         tm.assert_index_equal(result, expected)
 
     def test_to_timestamp_pi_combined(self):
@@ -116,14 +120,22 @@ class TestToTimestamp:
         expected = pd.DatetimeIndex(
             ["2011-01-02 00:59:59", "2011-01-03 01:59:59"], name="idx", dtype="M8[us]"
         )
-        expected = expected + pd.Timedelta(1, "s") - pd.Timedelta(1, "us")
+        expected = (
+            expected
+            + pd.Timedelta(1, input_unit="s")
+            - pd.Timedelta(1, input_unit="us")
+        )
         tm.assert_index_equal(result, expected)
 
         result = idx.to_timestamp(how="E", freq="h")
         expected = pd.DatetimeIndex(
             ["2011-01-02 00:00", "2011-01-03 01:00"], dtype="M8[us]", name="idx"
         )
-        expected = expected + pd.Timedelta(1, "h") - pd.Timedelta(1, "us")
+        expected = (
+            expected
+            + pd.Timedelta(1, input_unit="h")
+            - pd.Timedelta(1, input_unit="us")
+        )
         tm.assert_index_equal(result, expected)
 
     def test_to_timestamp_1703(self):

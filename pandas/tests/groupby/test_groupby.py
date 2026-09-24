@@ -2378,15 +2378,15 @@ def test_groupby_aggregation_multi_non_numeric_dtype():
     df = pd.DataFrame(
         {
             "x": [1, 0, 1, 1, 0],
-            "y": [pd.Timedelta(i, "days") for i in range(1, 6)],
-            "z": [pd.Timedelta(i * 10, "days") for i in range(1, 6)],
+            "y": [pd.Timedelta(i, input_unit="days") for i in range(1, 6)],
+            "z": [pd.Timedelta(i * 10, input_unit="days") for i in range(1, 6)],
         }
     )
 
     expected = pd.DataFrame(
         {
-            "y": [pd.Timedelta(i, "days") for i in range(7, 9)],
-            "z": [pd.Timedelta(i * 10, "days") for i in range(7, 9)],
+            "y": [pd.Timedelta(i, input_unit="days") for i in range(7, 9)],
+            "z": [pd.Timedelta(i * 10, input_unit="days") for i in range(7, 9)],
         },
         index=pd.Index([0, 1], dtype="int64", name="x"),
     )
@@ -2401,13 +2401,19 @@ def test_groupby_aggregation_numeric_with_non_numeric_dtype():
     df = pd.DataFrame(
         {
             "x": [1, 0, 1, 1, 0],
-            "y": [pd.Timedelta(i, "days") for i in range(1, 6)],
+            "y": [pd.Timedelta(i, input_unit="days") for i in range(1, 6)],
             "z": list(range(1, 6)),
         }
     )
 
     expected = pd.DataFrame(
-        {"y": [pd.Timedelta(7, "days"), pd.Timedelta(8, "days")], "z": [7, 8]},
+        {
+            "y": [
+                pd.Timedelta(7, input_unit="days"),
+                pd.Timedelta(8, input_unit="days"),
+            ],
+            "z": [7, 8],
+        },
         index=pd.Index([0, 1], dtype="int64", name="x"),
     )
 

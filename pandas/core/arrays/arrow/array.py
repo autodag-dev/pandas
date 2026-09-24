@@ -324,6 +324,67 @@ def to_pyarrow_type(
     return None
 
 
+@functools.cache
+def _pyarrow_tzinfo(tz: str):
+    """
+    The tzinfo pyarrow's own ``as_py()`` builds for this time zone string.
+
+    pandas resolves some spellings differently -- "UTC" gives
+    ``datetime.timezone.utc``, not ``ZoneInfo("UTC")`` -- so ask pyarrow.
+    """
+    return pa.scalar(0, type=pa.timestamp("us", tz=tz)).as_py().tzinfo
+
+
+def _has_ns_temporal(pa_type: pa.DataType) -> bool:
+    """
+    Whether pa_type, or a type nested inside it, is ns-precision temporal.
+
+    Those are the types whose ``as_py()`` goes through the deprecated
+    Timestamp/Timedelta ``unit=`` keyword (GH#62097).
+    """
+    # NB: do not memoize on pa_type -- a Python-defined pa.ExtensionType sets
+    #  __hash__ to None, so a type-keyed cache raises TypeError. Callers that
+    #  need this per element hold it in ArrowExtensionArray._needs_as_py.
+    if getattr(pa_type, "unit", None) == "ns":
+        return True
+    if pa.types.is_dictionary(pa_type):
+        return _has_ns_temporal(pa_type.value_type)
+    return any(
+        _has_ns_temporal(pa_type.field(i).type) for i in range(pa_type.num_fields)
+    )
+
+
+def _as_py(scalar: pa.Scalar):
+    """
+    scalar.as_py(), avoiding the deprecated Timestamp/Timedelta ``unit=``
+    keyword that pyarrow passes for ns-precision temporal scalars (GH#62097).
+    """
+    pa_type = scalar.type
+    if not scalar.is_valid or not _has_ns_temporal(pa_type):
+        return scalar.as_py()
+    if pa.types.is_timestamp(pa_type):
+        tz = None if pa_type.tz is None else _pyarrow_tzinfo(pa_type.tz)
+        return Timestamp(scalar.value, tz=tz)
+    elif pa.types.is_duration(pa_type):
+        return Timedelta(scalar.value)
+    elif pa.types.is_time(pa_type):
+        return Timestamp(scalar.value).time()
+    elif pa.types.is_struct(pa_type):
+        return {key: _as_py(scalar[key]) for key in scalar.keys()}
+    elif pa.types.is_map(pa_type):
+        return [(_as_py(kv["key"]), _as_py(kv["value"])) for kv in scalar.values]
+    elif (
+        pa.types.is_dictionary(pa_type)
+        or pa.types.is_run_end_encoded(pa_type)
+        or pa.types.is_union(pa_type)
+    ):
+        return _as_py(scalar.value)
+    elif getattr(scalar, "values", None) is not None:
+        # list, large_list, fixed_size_list and their view variants
+        return [_as_py(value) for value in scalar.values]
+    return scalar.as_py()
+
+
 def _is_varbinary_type(pa_type: pa.DataType) -> bool:
     """
     Whether this is one of string, large_string, binary and large_binary.
@@ -526,7 +587,7 @@ class ArrowExtensionArray(
     _pa_array: pa.ChunkedArray
     _dtype: ArrowDtype
     # results from calls to methods decorated with cache_readonly get added here
-    _cache: dict[str, pa.ChunkedArray]
+    _cache: dict[str, Any]
 
     def __init__(self, values: pa.Array | pa.ChunkedArray) -> None:
         if not HAS_PYARROW:
@@ -919,7 +980,9 @@ class ArrowExtensionArray(
                 # Workaround https://github.com/apache/arrow/issues/37291
                 from pandas.core.tools.timedeltas import to_timedelta
 
-                value = to_timedelta(value, unit=pa_type.unit).as_unit(pa_type.unit)
+                value = to_timedelta(value, input_unit=pa_type.unit).as_unit(
+                    pa_type.unit
+                )
                 value = value.to_numpy()
 
             if pa_type is not None and pa.types.is_timestamp(pa_type):
@@ -1105,7 +1168,7 @@ class ArrowExtensionArray(
             return result
         else:
             pa_type = self._pa_array.type
-            scalar = value.as_py()
+            scalar = _as_py(value) if self._needs_as_py else value.as_py()
             if scalar is None:
                 return self._dtype.na_value
             elif pa.types.is_timestamp(pa_type) and pa_type.unit != "ns":
@@ -1117,6 +1180,12 @@ class ArrowExtensionArray(
             else:
                 return scalar
 
+    @cache_readonly
+    def _needs_as_py(self) -> bool:
+        # per-instance so element-wise access does not re-hash the type
+        #  NB: not self._dtype.pyarrow_dtype -- ArrowStringArray has a StringDtype
+        return _has_ns_temporal(self._pa_array.type)
+
     def __iter__(self) -> Iterator[Any]:
         """
         Iterate over elements of the array.
@@ -1126,8 +1195,9 @@ class ArrowExtensionArray(
         pa_type = self._pa_array.type
         box_timestamp = pa.types.is_timestamp(pa_type) and pa_type.unit != "ns"
         box_timedelta = pa.types.is_duration(pa_type) and pa_type.unit != "ns"
+        needs_as_py = self._needs_as_py
         for value in self._pa_array:
-            val = value.as_py()
+            val = _as_py(value) if needs_as_py else value.as_py()
             if val is None:
                 yield na_value
             elif box_timestamp:
@@ -2870,7 +2940,7 @@ class ArrowExtensionArray(
 
         if keepdims:
             if isinstance(pa_result, pa.Scalar):
-                result = pa.array([pa_result.as_py()], type=pa_result.type)
+                result = pa.array([_as_py(pa_result)], type=pa_result.type)
             else:
                 result = pa.array(
                     [pa_result],
@@ -2881,7 +2951,7 @@ class ArrowExtensionArray(
         if pc.is_null(pa_result).as_py():
             return self.dtype.na_value
         elif isinstance(pa_result, pa.Scalar):
-            result = pa_result.as_py()
+            result = _as_py(pa_result)
             pa_type = pa_result.type
             if pa.types.is_duration(pa_type) and pa_type.unit != "ns":
                 return Timedelta(result).as_unit(pa_type.unit)
@@ -3094,7 +3164,7 @@ class ArrowExtensionArray(
                     f"index {key} is out of bounds for axis 0 with size {n}"
                 )
             if isinstance(value, pa.Scalar):
-                value = value.as_py()
+                value = _as_py(value)
             elif is_list_like(value):
                 raise ValueError("Length of indexer and values mismatch")
             chunks = [
@@ -3447,7 +3517,7 @@ class ArrowExtensionArray(
                 pa_type = value.type
             elif isinstance(value, pa.Scalar):
                 pa_type = value.type
-                value = value.as_py()
+                value = _as_py(value)
             else:
                 pa_type = None
             return np.array(value, dtype=object), pa_type
@@ -3501,7 +3571,7 @@ class ArrowExtensionArray(
         if isinstance(replacements, pa.Array):
             replacements = np.array(replacements, dtype=object)
         elif isinstance(replacements, pa.Scalar):
-            replacements = replacements.as_py()
+            replacements = _as_py(replacements)
 
         result = np.array(values, dtype=object)
         result[mask] = replacements
@@ -4276,9 +4346,13 @@ class ArrowExtensionArray(
         }
 
     def _dt_to_pytimedelta(self) -> np.ndarray:
-        data = self._pa_array.to_pylist()
         if self._dtype.pyarrow_dtype.unit == "ns":
-            data = [None if ts is None else ts.to_pytimedelta() for ts in data]
+            data = [
+                None if td is None else td.to_pytimedelta()
+                for td in map(_as_py, self._pa_array)
+            ]
+        else:
+            data = self._pa_array.to_pylist()
         return np.array(data, dtype=object)
 
     def _dt_total_seconds(self) -> Self:
@@ -4608,9 +4682,13 @@ class ArrowExtensionArray(
                 f"to_pydatetime cannot be called with {self.dtype.pyarrow_dtype} type. "
                 "Convert to pyarrow timestamp type."
             )
-        data = self._pa_array.to_pylist()
         if self._dtype.pyarrow_dtype.unit == "ns":
-            data = [None if ts is None else ts.to_pydatetime(warn=False) for ts in data]
+            data = [
+                None if ts is None else ts.to_pydatetime(warn=False)
+                for ts in map(_as_py, self._pa_array)
+            ]
+        else:
+            data = self._pa_array.to_pylist()
         return Series(data, dtype=object)
 
     def _dt_tz_localize(

@@ -615,7 +615,7 @@ class TestPeriodConcat:
 
 
 def test_concat_timedelta64_block():
-    rng = pd.to_timedelta(np.arange(10), unit="s")
+    rng = pd.to_timedelta(np.arange(10), input_unit="s")
 
     df = pd.DataFrame({"time": rng})
 

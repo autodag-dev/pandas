@@ -35,16 +35,27 @@ import pandas._testing as tm
 
 
 class TestTimestampConstructorUnitKeyword:
+    def test_unit_keyword_deprecated(self):
+        # GH#62097
+        msg = "The 'unit' argument is deprecated"
+        with tm.assert_produces_warning(Pandas4Warning, match=msg):
+            result = pd.Timestamp(1, unit="s")
+        assert result == pd.Timestamp(1, input_unit="s")
+
+        msg2 = "Specify only 'input_unit', not 'unit'"
+        with pytest.raises(ValueError, match=msg2):
+            pd.Timestamp(1, unit="s", input_unit="s")
+
     @pytest.mark.parametrize("typ", [int, float])
     def test_constructor_int_float_with_YM_unit(self, typ):
         # GH#47266 avoid the conversions in cast_from_unit
         val = typ(150)
 
-        ts = pd.Timestamp(val, unit="Y")
+        ts = pd.Timestamp(val, input_unit="Y")
         expected = pd.Timestamp("2120-01-01")
         assert ts == expected
 
-        ts = pd.Timestamp(val, unit="M")
+        ts = pd.Timestamp(val, input_unit="M")
         expected = pd.Timestamp("1982-07-01")
         assert ts == expected
 
@@ -55,17 +66,17 @@ class TestTimestampConstructorUnitKeyword:
 
         msg = f"cannot convert input {int(val)} with the unit 'D'"
         with pytest.raises(OutOfBoundsDatetime, match=msg):
-            pd.Timestamp(val, unit="D")
+            pd.Timestamp(val, input_unit="D")
 
     def test_constructor_float_not_round_with_YM_unit_raises(self):
         # GH#47267 avoid the conversions in cast_from-unit
 
-        msg = "Conversion of non-round float with unit=[MY] is ambiguous"
+        msg = "Conversion of non-round float with input_unit=[MY] is ambiguous"
         with pytest.raises(ValueError, match=msg):
-            pd.Timestamp(150.5, unit="Y")
+            pd.Timestamp(150.5, input_unit="Y")
 
         with pytest.raises(ValueError, match=msg):
-            pd.Timestamp(150.5, unit="M")
+            pd.Timestamp(150.5, input_unit="M")
 
     @pytest.mark.parametrize(
         "value, check_kwargs",
@@ -96,7 +107,7 @@ class TestTimestampConstructorUnitKeyword:
     )
     def test_construct_with_unit(self, value, check_kwargs):
         def check(value, unit=None, h=1, s=1, us=0, ns=0):
-            stamp = pd.Timestamp(value, unit=unit)
+            stamp = pd.Timestamp(value, input_unit=unit)
             if unit is None:
                 assert stamp.unit == "ns"
             elif isinstance(value, int) or value.is_integer():
@@ -1401,9 +1412,9 @@ def test_timestamp_nano_range(nano):
 
 def test_non_nano_value():
     # https://github.com/pandas-dev/pandas/issues/49076
-    msg = "The 'unit' keyword is only used when"
+    msg = "The 'input_unit' keyword is only used when"
     with tm.assert_produces_warning(UserWarning, match=msg):
-        result = pd.Timestamp("1800-01-01", unit="s").value
+        result = pd.Timestamp("1800-01-01", input_unit="s").value
     # `.value` shows nanoseconds, even though unit is 's'
     assert result == -5364662400000000000
 

@@ -3297,14 +3297,18 @@ class TestAsOfMerge:
             columns=["time", "left"],
         )
 
-        left["time"] = pd.to_timedelta(left["time"], "ms").astype(f"m8[{unit}]")
+        left["time"] = pd.to_timedelta(left["time"], input_unit="ms").astype(
+            f"m8[{unit}]"
+        )
 
         right = pd.DataFrame(
             list(zip([0, 3, 9, 12, 15, 18], [0, 1, 2, 3, 4, 5], strict=True)),
             columns=["time", "right"],
         )
 
-        right["time"] = pd.to_timedelta(right["time"], "ms").astype(f"m8[{unit}]")
+        right["time"] = pd.to_timedelta(right["time"], input_unit="ms").astype(
+            f"m8[{unit}]"
+        )
 
         expected = pd.DataFrame(
             list(
@@ -3318,7 +3322,9 @@ class TestAsOfMerge:
             columns=["time", "left", "right"],
         )
 
-        expected["time"] = pd.to_timedelta(expected["time"], "ms").astype(f"m8[{unit}]")
+        expected["time"] = pd.to_timedelta(expected["time"], input_unit="ms").astype(
+            f"m8[{unit}]"
+        )
 
         result = pd.merge_asof(
             left, right, on="time", tolerance=pd.Timedelta("1ms"), direction="nearest"

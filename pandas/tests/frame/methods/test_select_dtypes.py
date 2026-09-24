@@ -1286,7 +1286,7 @@ def test_select_dtypes_interval_family(spec):
 
 def _interval_unit_frame():
     dti = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"])
-    tdi = pd.to_timedelta([1, 2, 3, 4], unit="D")
+    tdi = pd.to_timedelta([1, 2, 3, 4], input_unit="D")
     return pd.DataFrame(
         {
             "dt_ns": pd.arrays.IntervalArray.from_breaks(dti.as_unit("ns")),

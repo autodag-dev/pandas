@@ -734,12 +734,12 @@ class TestPeriodMethods:
     def test_to_timestamp_mult(self):
         p = pd.Period("2011-01", freq="M")
         assert p.to_timestamp(how="S") == pd.Timestamp("2011-01-01")
-        expected = pd.Timestamp("2011-02-01") - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp("2011-02-01") - pd.Timedelta(1, input_unit="us")
         assert p.to_timestamp(how="E") == expected
 
         p = pd.Period("2011-01", freq="3M")
         assert p.to_timestamp(how="S") == pd.Timestamp("2011-01-01")
-        expected = pd.Timestamp("2011-04-01") - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp("2011-04-01") - pd.Timedelta(1, input_unit="us")
         assert p.to_timestamp(how="E") == expected
 
     @pytest.mark.filterwarnings(
@@ -767,7 +767,7 @@ class TestPeriodMethods:
                 return (
                     p.start_time + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
                 )
-            return pd.Timestamp((p + p.freq).start_time._value - 1, unit="us")
+            return pd.Timestamp((p + p.freq).start_time._value - 1, input_unit="us")
 
         for fcode in from_lst:
             p = pd.Period("1982", freq=fcode)
@@ -783,19 +783,19 @@ class TestPeriodMethods:
         p = pd.Period("1985", freq="Y")
 
         result = p.to_timestamp("h", how="end")
-        expected = pd.Timestamp(1986, 1, 1) - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp(1986, 1, 1) - pd.Timedelta(1, input_unit="us")
         assert result == expected
         result = p.to_timestamp("3h", how="end")
         assert result == expected
 
         result = p.to_timestamp("min", how="end")
-        expected = pd.Timestamp(1986, 1, 1) - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp(1986, 1, 1) - pd.Timedelta(1, input_unit="us")
         assert result == expected
         result = p.to_timestamp("2min", how="end")
         assert result == expected
 
         result = p.to_timestamp(how="end")
-        expected = pd.Timestamp(1986, 1, 1) - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp(1986, 1, 1) - pd.Timedelta(1, input_unit="us")
         assert result == expected
 
         expected = datetime(1985, 1, 1)
@@ -815,7 +815,7 @@ class TestPeriodMethods:
             per = pd.Period("1990-01-05", "B")  # Friday
             result = per.to_timestamp("B", how="E")
 
-        expected = pd.Timestamp("1990-01-06") - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp("1990-01-06") - pd.Timedelta(1, input_unit="us")
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -1104,7 +1104,7 @@ class TestPeriodProperties:
         period = TestPeriodProperties._period_constructor(bound, -offset)
         expected = period.to_timestamp().round(freq="s")
         assert getattr(period, period_property).round(freq="s") == expected
-        expected = (bound - offset * pd.Timedelta(1, unit="s")).floor("s")
+        expected = (bound - offset * pd.Timedelta(1, input_unit="s")).floor("s")
         assert getattr(period, period_property).floor("s") == expected
 
     def test_start_time(self):
@@ -1167,7 +1167,7 @@ class TestPeriodProperties:
             per = pd.Period("1990-01-05", "B")
             result = per.end_time
 
-        expected = pd.Timestamp("1990-01-06") - pd.Timedelta(1, unit="us")
+        expected = pd.Timestamp("1990-01-06") - pd.Timedelta(1, input_unit="us")
         assert result == expected
 
     def test_anchor_week_end_time(self):

@@ -552,7 +552,9 @@ def test_dti_tz_localize_nonexistent_timedelta_shift_onto_nat_sentinel():
     #  missing value.  Asia/Tokyo's +9 offset is what makes the two line up.
     dti = pd.DatetimeIndex([pd.Timestamp("1948-05-02 00:30")]).as_unit("ns")
     jst = 9 * 3600 * 10**9
-    shift = pd.Timedelta(pd.Timestamp.min._value - 1 + jst - dti.asi8[0], "ns")
+    shift = pd.Timedelta(
+        pd.Timestamp.min._value - 1 + jst - dti.asi8[0], input_unit="ns"
+    )
 
     with pytest.raises(OutOfBoundsDatetime, match="underflows past"):
         dti.tz_localize("Asia/Tokyo", nonexistent=shift)

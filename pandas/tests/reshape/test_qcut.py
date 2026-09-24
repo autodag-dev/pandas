@@ -197,7 +197,7 @@ def test_qcut_nat(ser, unit):
     # see gh-19768
     ser = pd.Series(ser)
     ser = ser.dt.as_unit(unit)
-    td = pd.Timedelta(1, unit=unit).as_unit(unit)
+    td = pd.Timedelta(1, input_unit=unit).as_unit(unit)
 
     left = pd.Series([ser[0] - td, np.nan, ser[2] - Day()], dtype=ser.dtype)
     right = pd.Series([ser[2] - Day(), np.nan, ser[2]], dtype=ser.dtype)

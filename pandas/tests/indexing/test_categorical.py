@@ -522,7 +522,11 @@ class TestCategoricalIndex:
                 pd.Timestamp(2019, 2, 1),
                 pd.Timestamp(2019, 3, 1),
             ],
-            [pd.Timedelta(1, "D"), pd.Timedelta(2, "D"), pd.Timedelta(3, "D")],
+            [
+                pd.Timedelta(1, input_unit="D"),
+                pd.Timedelta(2, input_unit="D"),
+                pd.Timedelta(3, input_unit="D"),
+            ],
             # pandas Integer arrays
             *(pd.array([1, 2, 3], dtype=dtype) for dtype in tm.ALL_INT_EA_DTYPES),
             # other pandas arrays

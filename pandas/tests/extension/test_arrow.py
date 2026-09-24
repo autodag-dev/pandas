@@ -3741,7 +3741,7 @@ def test_as_unit_duration_truncation(from_unit, to_unit):
     # Test that as_unit truncates correctly (matches NumPy behavior)
     # Value with sub-unit precision to test truncation
     ser_numpy = pd.Series(
-        pd.to_timedelta([93784567890123, None], unit="ns").as_unit(from_unit)
+        pd.to_timedelta([93784567890123, None], input_unit="ns").as_unit(from_unit)
     )
     ser_arrow = ser_numpy.astype(f"duration[{from_unit}][pyarrow]")
 
@@ -3814,13 +3814,13 @@ def test_as_unit_duration_negative_floors(from_unit, to_unit):
     # GH#63573 downcasting a negative duration must floor toward -inf like
     # numpy, not truncate toward zero
     values = [93784567890123, -93784567890123, None]
-    ser_arrow = pd.Series(pd.to_timedelta(values, unit="ns").as_unit(from_unit)).astype(
-        f"duration[{from_unit}][pyarrow]"
-    )
+    ser_arrow = pd.Series(
+        pd.to_timedelta(values, input_unit="ns").as_unit(from_unit)
+    ).astype(f"duration[{from_unit}][pyarrow]")
 
     result = ser_arrow.dt.as_unit(to_unit)
     expected = pd.Series(
-        pd.to_timedelta(values, unit="ns").as_unit(from_unit).as_unit(to_unit)
+        pd.to_timedelta(values, input_unit="ns").as_unit(from_unit).as_unit(to_unit)
     ).astype(f"duration[{to_unit}][pyarrow]")
     tm.assert_series_equal(result, expected)
 
@@ -4547,7 +4547,7 @@ def test_describe_timedelta_data(pa_type):
     data = pd.Series(range(1, 10), dtype=ArrowDtype(pa_type))
     result = data.describe()
     expected = pd.Series(
-        [9, *pd.to_timedelta([5, 2, 1, 3, 5, 7, 9], unit=pa_type.unit).tolist()],
+        [9, *pd.to_timedelta([5, 2, 1, 3, 5, 7, 9], input_unit=pa_type.unit).tolist()],
         dtype=object,
         index=["count", "mean", "std", "min", "25%", "50%", "75%", "max"],
     )
@@ -4562,7 +4562,7 @@ def test_describe_datetime_data(pa_type):
     expected = pd.Series(
         [9]
         + [
-            pd.Timestamp(v, tz=pa_type.tz, unit=pa_type.unit)
+            pd.Timestamp(v, tz=pa_type.tz, input_unit=pa_type.unit)
             for v in [5, 1, 3, 5, 7, 9]
         ],
         dtype=object,
@@ -4625,9 +4625,9 @@ def test_from_sequence_temporal(pa_type):
     val = 3
     unit = pa_type.unit
     if pa.types.is_duration(pa_type):
-        seq = [pd.Timedelta(val, unit=unit).as_unit(unit)]
+        seq = [pd.Timedelta(val, input_unit=unit).as_unit(unit)]
     else:
-        seq = [pd.Timestamp(val, unit=unit, tz=pa_type.tz).as_unit(unit)]
+        seq = [pd.Timestamp(val, input_unit=unit, tz=pa_type.tz).as_unit(unit)]
 
     result = ArrowExtensionArray._from_sequence(seq, dtype=pa_type)
     expected = ArrowExtensionArray(pa.array([val], type=pa_type))
@@ -4641,9 +4641,9 @@ def test_setitem_temporal(pa_type):
     # GH 53171
     unit = pa_type.unit
     if pa.types.is_duration(pa_type):
-        val = pd.Timedelta(1, unit=unit).as_unit(unit)
+        val = pd.Timedelta(1, input_unit=unit).as_unit(unit)
     else:
-        val = pd.Timestamp(1, unit=unit, tz=pa_type.tz).as_unit(unit)
+        val = pd.Timestamp(1, input_unit=unit, tz=pa_type.tz).as_unit(unit)
 
     arr = ArrowExtensionArray(pa.array([1, 2, 3], type=pa_type))
 
@@ -4660,7 +4660,7 @@ def test_arithmetic_temporal(pa_type, request):
     # GH 53171
     arr = ArrowExtensionArray(pa.array([1, 2, 3], type=pa_type))
     unit = pa_type.unit
-    result = arr - pd.Timedelta(1, unit=unit).as_unit(unit)
+    result = arr - pd.Timedelta(1, input_unit=unit).as_unit(unit)
     expected = ArrowExtensionArray(pa.array([0, 1, 2], type=pa_type))
     tm.assert_extension_array_equal(result, expected)
 
@@ -4694,9 +4694,9 @@ def test_comparison_temporal(pa_type):
     # GH 53171
     unit = pa_type.unit
     if pa.types.is_duration(pa_type):
-        val = pd.Timedelta(1, unit=unit).as_unit(unit)
+        val = pd.Timedelta(1, input_unit=unit).as_unit(unit)
     else:
-        val = pd.Timestamp(1, unit=unit, tz=pa_type.tz).as_unit(unit)
+        val = pd.Timestamp(1, input_unit=unit, tz=pa_type.tz).as_unit(unit)
 
     arr = ArrowExtensionArray(pa.array([1, 2, 3], type=pa_type))
 
@@ -4713,10 +4713,10 @@ def test_getitem_temporal(pa_type):
     arr = ArrowExtensionArray(pa.array([1, 2, 3], type=pa_type))
     result = arr[1]
     if pa.types.is_duration(pa_type):
-        expected = pd.Timedelta(2, unit=pa_type.unit).as_unit(pa_type.unit)
+        expected = pd.Timedelta(2, input_unit=pa_type.unit).as_unit(pa_type.unit)
         assert isinstance(result, pd.Timedelta)
     else:
-        expected = pd.Timestamp(2, unit=pa_type.unit, tz=pa_type.tz).as_unit(
+        expected = pd.Timestamp(2, input_unit=pa_type.unit, tz=pa_type.tz).as_unit(
             pa_type.unit
         )
         assert isinstance(result, pd.Timestamp)
@@ -4733,18 +4733,108 @@ def test_iter_temporal(pa_type):
     result = list(arr)
     if pa.types.is_duration(pa_type):
         expected = [
-            pd.Timedelta(1, unit=pa_type.unit).as_unit(pa_type.unit),
+            pd.Timedelta(1, input_unit=pa_type.unit).as_unit(pa_type.unit),
             pd.NA,
         ]
         assert isinstance(result[0], pd.Timedelta)
     else:
         expected = [
-            pd.Timestamp(1, unit=pa_type.unit, tz=pa_type.tz).as_unit(pa_type.unit),
+            pd.Timestamp(1, input_unit=pa_type.unit, tz=pa_type.tz).as_unit(
+                pa_type.unit
+            ),
             pd.NA,
         ]
         assert isinstance(result[0], pd.Timestamp)
     assert result[0].unit == expected[0].unit
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "pa_type",
+    [
+        pa.list_(pa.timestamp("ns")),
+        pa.large_list(pa.timestamp("ns")),
+        pa.list_(pa.duration("ns"), 2),
+        pa.struct([("t", pa.timestamp("ns"))]),
+        pa.map_(pa.string(), pa.timestamp("ns")),
+        pa.dictionary(pa.int32(), pa.timestamp("ns")),
+        pa.run_end_encoded(pa.int32(), pa.timestamp("ns")),
+    ],
+    ids=repr,
+)
+def test_nested_ns_temporal_no_unit_deprecation(pa_type):
+    # GH#62097 unboxing an ns-precision temporal nested inside a container
+    #  must not surface pyarrow's internal use of the deprecated 'unit'
+    if pa.types.is_dictionary(pa_type):
+        pa_arr = pa.array([1], type=pa_type.value_type).dictionary_encode()
+    elif pa.types.is_run_end_encoded(pa_type):
+        pa_arr = pa.array([1], type=pa_type)
+    elif pa.types.is_map(pa_type):
+        pa_arr = pa.array([[("a", 1)]], type=pa_type)
+    elif pa.types.is_struct(pa_type):
+        pa_arr = pa.array([{"t": 1}], type=pa_type)
+    elif pa.types.is_fixed_size_list(pa_type):
+        pa_arr = pa.array([[1, 2]], type=pa_type)
+    else:
+        pa_arr = pa.array([[1]], type=pa_type)
+
+    ser = pd.Series(pa_arr, dtype=ArrowDtype(pa_type))
+    with tm.assert_produces_warning(None):
+        result = ser.tolist()
+        assert ser[0] == result[0]
+        assert list(ser.array) == result
+
+    # values still match what pyarrow itself would have produced
+    with tm.assert_produces_warning(Pandas4Warning, match="'unit' argument"):
+        expected = pa_arr.to_pylist()
+    assert result == expected
+
+
+def test_unhashable_extension_type_getitem():
+    # GH#62097 a Python-defined pa.ExtensionType sets __hash__ to None, so the
+    #  ns-temporal check must not be memoized on the type
+    class MyExtensionType(pa.ExtensionType):
+        def __init__(self) -> None:
+            super().__init__(pa.int64(), "pandas.tests.myext")
+
+        def __arrow_ext_serialize__(self):
+            return b""
+
+        @classmethod
+        def __arrow_ext_deserialize__(cls, storage_type, serialized):
+            return cls()
+
+    pa_type = MyExtensionType()
+    assert pa_type.__hash__ is None
+    arr = ArrowExtensionArray(
+        pa.ExtensionArray.from_storage(pa_type, pa.array([1, 2], type=pa.int64()))
+    )
+    assert arr[0] == 1
+    assert list(arr) == [1, 2]
+
+
+def test_union_ns_temporal_no_unit_deprecation():
+    # GH#62097 a union is not an ArrowDtype, but ArrowExtensionArray still holds one
+    pa_arr = pa.UnionArray.from_sparse(
+        pa.array([0, 1], pa.int8()),
+        [pa.array([1, 2], pa.timestamp("ns")), pa.array(["a", "b"])],
+    )
+    ser = pd.Series(ArrowExtensionArray(pa_arr))
+    with tm.assert_produces_warning(None):
+        result = ser.tolist()
+    with tm.assert_produces_warning(Pandas4Warning, match="'unit' argument"):
+        expected = pa_arr.to_pylist()
+    assert result == expected
+
+
+def test_getitem_ns_tz_matches_pyarrow_tzinfo():
+    # GH#62097 the shim must reuse pyarrow's tzinfo; pandas resolves "UTC" to
+    #  datetime.timezone.utc where pyarrow gives ZoneInfo("UTC")
+    pa_type = pa.timestamp("ns", tz="UTC")
+    arr = ArrowExtensionArray(pa.array([0], type=pa_type))
+    with tm.assert_produces_warning(Pandas4Warning, match="'unit' argument"):
+        expected = pa.array([0], type=pa_type)[0].as_py()
+    assert arr[0].tzinfo is expected.tzinfo
 
 
 def test_groupby_series_size_returns_pa_int(data):
@@ -4765,9 +4855,11 @@ def test_to_numpy_temporal(pa_type, dtype):
     arr = ArrowExtensionArray(pa.array([1, None], type=pa_type))
     result = arr.to_numpy(dtype=dtype)
     if pa.types.is_duration(pa_type):
-        value = pd.Timedelta(1, unit=pa_type.unit).as_unit(pa_type.unit)
+        value = pd.Timedelta(1, input_unit=pa_type.unit).as_unit(pa_type.unit)
     else:
-        value = pd.Timestamp(1, unit=pa_type.unit, tz=pa_type.tz).as_unit(pa_type.unit)
+        value = pd.Timestamp(1, input_unit=pa_type.unit, tz=pa_type.tz).as_unit(
+            pa_type.unit
+        )
 
     if dtype == object or (pa.types.is_timestamp(pa_type) and pa_type.tz is not None):
         if dtype == object:

@@ -187,7 +187,7 @@ def test_cast_from_unit_vectorized_near_int64_boundary(unit):
         arr = np.array([val], dtype="float64")
         # Timedelta(...).value is the scalar cast_from_unit result in ns
         try:
-            expected = pd.Timedelta(val, unit=unit).value
+            expected = pd.Timedelta(val, input_unit=unit).value
         except (OutOfBoundsDatetime, OutOfBoundsTimedelta, OverflowError):
             with pytest.raises(OutOfBoundsDatetime):
                 conversion.cast_from_unit_vectorized(arr, unit)

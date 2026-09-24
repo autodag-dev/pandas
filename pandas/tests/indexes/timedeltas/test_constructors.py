@@ -97,7 +97,7 @@ class TestTimedeltaIndex:
 
     def test_float64_unit_conversion(self):
         # GH#23539
-        tdi = pd.to_timedelta([1.5, 2.25], unit="D")
+        tdi = pd.to_timedelta([1.5, 2.25], input_unit="D")
         expected = pd.TimedeltaIndex(
             [pd.Timedelta(days=1.5), pd.Timedelta(days=2.25)], dtype="m8[ns]"
         )
@@ -166,7 +166,7 @@ class TestTimedeltaIndex:
         # NumPy string array
         strings = np.array(["1 days", "2 days", "3 days"])
         result = pd.TimedeltaIndex(strings)
-        expected = pd.to_timedelta([1, 2, 3], unit="D").as_unit("us")
+        expected = pd.to_timedelta([1, 2, 3], input_unit="D").as_unit("us")
         tm.assert_index_equal(result, expected)
 
         from_ints = pd.TimedeltaIndex(expected.as_unit("ns").asi8)
@@ -260,5 +260,5 @@ class TestTimedeltaIndex:
         tm.assert_index_equal(result, expected)
 
         with tm.assert_produces_warning(Pandas4Warning, match=msg):
-            tdi = pd.to_timedelta([1, 2], unit=unit_depr)
+            tdi = pd.to_timedelta([1, 2], input_unit=unit_depr)
         tm.assert_index_equal(tdi, expected.as_unit("us"))

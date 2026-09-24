@@ -25,7 +25,7 @@ class TestSeriesClip:
         sers = [
             pd.Series([np.nan, 1.0, 2.0, 3.0]),
             pd.Series([None, "a", "b", "c"]),
-            pd.Series(pd.to_datetime([np.nan, 1, 2, 3], unit="D")),
+            pd.Series(pd.to_datetime([np.nan, 1, 2, 3], input_unit="D")),
         ]
 
         for s in sers:
