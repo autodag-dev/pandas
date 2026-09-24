@@ -392,6 +392,7 @@ class NumpyExtensionArray(
         limit_direction,
         limit_area,
         copy: bool,
+        limit_behavior: Literal["fill", "skip"] = "fill",
         **kwargs,
     ) -> Self:
         """
@@ -415,6 +416,7 @@ class NumpyExtensionArray(
             limit=limit,
             limit_direction=limit_direction,
             limit_area=limit_area,
+            limit_behavior=limit_behavior,
             **kwargs,
         )
         if not copy:
