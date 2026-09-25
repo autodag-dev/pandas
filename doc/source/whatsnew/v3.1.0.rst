@@ -1221,6 +1221,7 @@ Groupby/resample/rolling
 Reshaping
 ^^^^^^^^^
 - :func:`concat` with ``keys`` now raises an informative ``ValueError`` instead of an ``AssertionError`` when the concatenated objects do not all have the same number of index levels (:issue:`25413`)
+- :meth:`DataFrame.stack` now raises an informative ``ValueError`` instead of an uninformative ``AssertionError`` or ``IndexError`` when ``level`` contains duplicate entries (:issue:`66588`)
 - :meth:`DataFrame.pivot` and :func:`pivot` now raise an informative ``KeyError`` naming the offending labels when ``index``, ``columns``, or ``values`` are not columns of the frame, instead of a cryptic ``TypeError`` (:issue:`35785`)
 - Bug in :func:`concat` and :meth:`Series.combine_first` silently dropping the timezone of an :class:`ArrowDtype` ``timestamp`` column, shifting its values by the UTC offset, when it was combined with a ``timestamp`` column of a different dtype; the result is now ``object`` when the two timezones disagree, and otherwise keeps the timezone, including against a timezone-aware ``datetime64`` column that previously gave ``object`` (:issue:`69029`)
 - Bug in :func:`concat` raising ``InvalidIndexError`` when ``keys`` or the concatenated objects' index was an overlapping :class:`IntervalIndex` (:issue:`64825`)
