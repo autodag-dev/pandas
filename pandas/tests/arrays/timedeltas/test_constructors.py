@@ -84,7 +84,7 @@ def test_from_sequence_numeric_honors_unit(data):
 @pytest.mark.parametrize(
     "other, other_secs",
     [
-        (pd.Timedelta(1, "s"), 1),
+        (pd.Timedelta(1, input_unit="s"), 1),
         (np.timedelta64(1, "s"), 1),
         (timedelta(seconds=1), 1),
         (pd.offsets.Day(1), 86400),
@@ -108,7 +108,9 @@ def test_from_sequence_mixed_numeric_overflow_raises():
     #  array's resolution; to_timedelta(unit="s") raises on this too
     msg = "Cannot cast 1099511627776 from s to 'ns' without overflow"
     with pytest.raises(OutOfBoundsTimedelta, match=msg):
-        TimedeltaArray._from_sequence([2**40, pd.Timedelta(1, "ns")], dtype="m8[s]")
+        TimedeltaArray._from_sequence(
+            [2**40, pd.Timedelta(1, input_unit="ns")], dtype="m8[s]"
+        )
 
 
 def test_from_sequence_str_with_numeric_ignores_unit():

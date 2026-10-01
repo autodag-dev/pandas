@@ -390,9 +390,9 @@ class TestTake:
         #  datetimelike subtype against type(np.nan) raised outright
         data = np.array([1, 3, 5], dtype=unit)
         fill = (
-            pd.Timestamp(99, unit=unit[3:-1])
+            pd.Timestamp(99, input_unit=unit[3:-1])
             if unit[0] == "M"
-            else pd.Timedelta(99, unit[3:-1])
+            else pd.Timedelta(99, input_unit=unit[3:-1])
         )
         sparse = SparseArray(data, fill_value=fill)
         assert sparse.sp_index.ngaps == 0

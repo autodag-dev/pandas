@@ -95,7 +95,7 @@ class TestNonNano:
         # residuals must keep the result strictly off integer-second
         # boundaries, otherwise bisect-style lookups (e.g. dateutil DST,
         # GH#31043) misclassify the timestamp as on a transition.
-        tdi = pd.to_timedelta([value, pd.NaT], unit="ns")
+        tdi = pd.to_timedelta([value, pd.NaT], input_unit="ns")
         result = tdi.total_seconds()
         assert np.isnan(result[1])
         if direction == "below":
@@ -120,7 +120,7 @@ class TestNonNano:
             9_223_372_036_854_775_807,  # int64 ns max
         ]
         values = values + [-val for val in values]
-        result = pd.to_timedelta(values, unit="ns").total_seconds()
+        result = pd.to_timedelta(values, input_unit="ns").total_seconds()
         expected = [pd.Timedelta(val).total_seconds() for val in values]
         assert list(result) == expected
 

@@ -1147,7 +1147,7 @@ def test_query_compare_column_type(temp_hdfstore):
 
     for op in ["<", ">", "=="]:
         # non strings to string column always fail
-        for v in [2.1, True, Timestamp("2014-01-01"), pd.Timedelta(1, "s")]:
+        for v in [2.1, True, Timestamp("2014-01-01"), pd.Timedelta(1, input_unit="s")]:
             query = f"date {op} v"
             msg = f"Cannot compare {v} of type {type(v)} to string column"
             with pytest.raises(TypeError, match=msg):
@@ -1230,7 +1230,7 @@ def test_select_integer_column_non_integer_string_value(temp_hdfstore):
         ["a", "b", "c"],
         [True, False, True],
         pd.to_datetime(["2020-01-01", None, "2020-01-03"]),
-        pd.to_timedelta([1, None, 3], unit="D"),
+        pd.to_timedelta([1, None, 3], input_unit="D"),
         pd.Categorical(["a", None, "c"]),
     ],
 )

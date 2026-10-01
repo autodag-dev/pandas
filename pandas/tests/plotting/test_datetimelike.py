@@ -1859,7 +1859,7 @@ class TestTSPlot:
     def test_irregular_timedelta_index_labels(self):
         # GH#18910 a sub-millisecond TimedeltaIndex with no inferred freq must
         # still get x-axis tick labels
-        rng = pd.to_timedelta(np.arange(0, 1, 1e-4), unit="s")
+        rng = pd.to_timedelta(np.arange(0, 1, 1e-4), input_unit="s")
         df = pd.DataFrame(np.random.default_rng(2).standard_normal((len(rng), 3)), rng)
         _, ax = mpl.pyplot.subplots()
         df.plot(ax=ax)

@@ -525,7 +525,7 @@ class TestContains:
         # GH#13603, GH#59051
         msg = "'d' is deprecated and will be removed in a future version."
         with tm.assert_produces_warning(Pandas4Warning, match=msg):
-            td = pd.to_timedelta(range(5), unit="d") + pd.offsets.Hour(1)
+            td = pd.to_timedelta(range(5), input_unit="d") + pd.offsets.Hour(1)
         for v in [pd.NaT, None, float("nan"), np.nan]:
             assert v not in td
 

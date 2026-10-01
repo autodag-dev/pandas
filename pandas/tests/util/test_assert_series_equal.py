@@ -658,7 +658,7 @@ def test_assert_series_equal_large_int_atol(dtype):
             pd.arrays.IntervalArray.from_tuples([(1.5, 2.0)]),
         ),
         (pd.to_datetime(["2020-01-01"]), pd.to_datetime(["2020-01-02"])),
-        (pd.to_timedelta([1], unit="D"), pd.to_timedelta([2], unit="D")),
+        (pd.to_timedelta([1], input_unit="D"), pd.to_timedelta([2], input_unit="D")),
         (
             pd.period_range("2020-01-01", periods=1, freq="D"),
             pd.period_range("2020-01-02", periods=1, freq="D"),

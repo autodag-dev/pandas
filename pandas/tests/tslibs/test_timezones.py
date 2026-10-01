@@ -384,7 +384,7 @@ def test_zoneinfo_nonexistent_at_last_cached_transition(tz_name):
     start, end = ZoneInfo(tz_name)._tz_after.transitions(2099)
     if start > end:
         # to-dst nonexistent transition at the end of the year
-        ts = pd.Timestamp(start, unit="s") + pd.Timedelta(minutes=30)
+        ts = pd.Timestamp(start, input_unit="s") + pd.Timedelta(minutes=30)
 
         with pytest.raises(ValueError, match="nonexistent time"):
             ts.tz_localize(tz_name)
@@ -404,7 +404,7 @@ def test_zoneinfo_nonexistent_at_last_cached_transition(tz_name):
 
     else:
         # to-std ambiguous transition at the end of the year
-        ts = pd.Timestamp(end, unit="s") - pd.Timedelta(minutes=30)
+        ts = pd.Timestamp(end, input_unit="s") - pd.Timedelta(minutes=30)
 
         with pytest.raises(ValueError, match="Cannot infer dst time"):
             ts.tz_localize(tz_name)
@@ -444,7 +444,7 @@ def test_zoneinfo_conversion_outside_range_stdlib():
         ts.tz_localize("Europe/Brussels")
 
     with pytest.raises(NotImplementedError, match=msg):
-        ts = pd.Timestamp(ts._value, unit="us", tz="Europe/Brussels")
+        ts = pd.Timestamp(ts._value, input_unit="us", tz="Europe/Brussels")
 
 
 def test_normalize_pytz_timezone():

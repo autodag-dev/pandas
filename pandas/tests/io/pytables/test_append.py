@@ -834,7 +834,7 @@ def test_append_with_timedelta(temp_hdfstore, unit):
     tm.assert_frame_equal(result, df)
 
     result = temp_hdfstore.select("df", where="C<100000")
-    tm.assert_frame_equal(result, df[df["C"] < pd.Timedelta(100000, unit="s")])
+    tm.assert_frame_equal(result, df[df["C"] < pd.Timedelta(100000, input_unit="s")])
 
     result = temp_hdfstore.select("df", where="C<pd.Timedelta('-3D')")
     tm.assert_frame_equal(result, df[df["C"] < pd.Timedelta("-3D")])

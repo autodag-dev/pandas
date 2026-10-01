@@ -746,12 +746,12 @@ class TestAddSubNaTMasking:
         # TODO: Make raised error message more informative and test
         ts = pd.Timestamp("2000").as_unit("ns")
         with pytest.raises(OutOfBoundsDatetime, match="10155196800000000000"):
-            pd.to_timedelta(106580, "D") + ts
+            pd.to_timedelta(106580, input_unit="D") + ts
         with pytest.raises(OutOfBoundsDatetime, match="10155196800000000000"):
-            ts + pd.to_timedelta(106580, "D")
+            ts + pd.to_timedelta(106580, input_unit="D")
 
         _NaT = pd.NaT._value + 1
-        td = pd.to_timedelta([106580], "D").as_unit("ns")
+        td = pd.to_timedelta([106580], input_unit="D").as_unit("ns")
         msg = "Overflow in int64 addition"
         with pytest.raises(OverflowError, match=msg):
             td + pd.Timestamp("2000")
@@ -791,10 +791,10 @@ class TestAddSubNaTMasking:
 
         msg = "Overflow in int64 addition"
         with pytest.raises(OverflowError, match=msg):
-            tdi - pd.Timedelta(1, unit).as_unit(unit)
+            tdi - pd.Timedelta(1, input_unit=unit).as_unit(unit)
 
         with pytest.raises(OverflowError, match=msg):
-            tdi + pd.Timedelta(-1, unit).as_unit(unit)
+            tdi + pd.Timedelta(-1, input_unit=unit).as_unit(unit)
 
 
 class TestTimedeltaArraylikeAddSubOps:
@@ -1627,7 +1627,7 @@ class TestTimedeltaArraylikeMulDivOps:
 
     def test_td64arr_mul_int_overflow(self, box_with_array):
         # GH#43178: int multiplication on timedelta64[ns] used to silently wrap
-        td = pd.Timedelta(100000, "D").as_unit("ns")
+        td = pd.Timedelta(100000, input_unit="D").as_unit("ns")
         tdi = pd.TimedeltaIndex([td, td])
         tdi = tm.box_expected(tdi, box_with_array)
 
@@ -1644,7 +1644,9 @@ class TestTimedeltaArraylikeMulDivOps:
     def test_td64arr_mul_uint_overflow(self, box_with_array):
         # GH#43178: an unsigned multiplier above int64.max must not wrap to a
         #  negative int64 before the overflow check; it should raise instead.
-        tdi = pd.TimedeltaIndex([pd.Timedelta(1, "ns"), pd.Timedelta(1, "ns")])
+        tdi = pd.TimedeltaIndex(
+            [pd.Timedelta(1, input_unit="ns"), pd.Timedelta(1, input_unit="ns")]
+        )
         tdi = tm.box_expected(tdi, box_with_array)
 
         msg = "Overflow in int64 multiplication"
@@ -1661,7 +1663,10 @@ class TestTimedeltaArraylikeMulDivOps:
         # GH#43178: a product landing exactly on int64.min would be
         #  misinterpreted as iNaT; it must raise, not silently return NaT
         tdi = pd.TimedeltaIndex(
-            [pd.Timedelta(-(2**62), "ns"), pd.Timedelta(-(2**62), "ns")]
+            [
+                pd.Timedelta(-(2**62), input_unit="ns"),
+                pd.Timedelta(-(2**62), input_unit="ns"),
+            ]
         )
         tdi = tm.box_expected(tdi, box_with_array)
 
@@ -1672,7 +1677,7 @@ class TestTimedeltaArraylikeMulDivOps:
     def test_td64arr_mul_float_overflow(self, box_with_array):
         # GH#43178: float multiplication on timedelta64[ns] used to silently
         #  saturate to int64.max
-        td = pd.Timedelta(100000, "D").as_unit("ns")
+        td = pd.Timedelta(100000, input_unit="D").as_unit("ns")
         tdi = pd.TimedeltaIndex([td, td])
         tdi = tm.box_expected(tdi, box_with_array)
 
@@ -1691,7 +1696,9 @@ class TestTimedeltaArraylikeMulDivOps:
         #  raise rather than silently saturate on the float -> int64 cast.
         # GH#66551: 2.0 is integral, so it now takes the same exact int64 path
         #  as `tdi * 2` and reports the same message.
-        tdi = pd.TimedeltaIndex([pd.Timedelta(2**62, "ns"), pd.Timedelta(2**62, "ns")])
+        tdi = pd.TimedeltaIndex(
+            [pd.Timedelta(2**62, input_unit="ns"), pd.Timedelta(2**62, input_unit="ns")]
+        )
         tdi = tm.box_expected(tdi, box_with_array)
 
         msg = "Overflow in int64 multiplication"
@@ -1703,7 +1710,9 @@ class TestTimedeltaArraylikeMulDivOps:
         # GH#66551 an integral float operand has an exact int equivalent, so it
         #  takes the int64 path rather than float64, matching both the scalar
         #  Timedelta and the equivalent int operand
-        tdi = pd.TimedeltaIndex([pd.Timedelta(2**53 + 1, "ns"), pd.Timedelta.min])
+        tdi = pd.TimedeltaIndex(
+            [pd.Timedelta(2**53 + 1, input_unit="ns"), pd.Timedelta.min]
+        )
         obj = tm.box_expected(tdi, box_with_array)
 
         tm.assert_equal(op(obj, 1.0), obj)
@@ -1712,7 +1721,9 @@ class TestTimedeltaArraylikeMulDivOps:
     def test_td64arr_mul_inf_raises(self, box_with_array):
         # GH#43178: multiplying by inf raises (matching scalar Timedelta)
         #  instead of returning NaT as numpy does
-        tdi = pd.TimedeltaIndex([pd.Timedelta(1, "ns"), pd.Timedelta(1, "ns")])
+        tdi = pd.TimedeltaIndex(
+            [pd.Timedelta(1, input_unit="ns"), pd.Timedelta(1, input_unit="ns")]
+        )
         tdi = tm.box_expected(tdi, box_with_array)
 
         msg = "Overflow in timedelta multiplication"
@@ -1723,7 +1734,9 @@ class TestTimedeltaArraylikeMulDivOps:
 
     def test_td64arr_mul_nan_returns_nat(self, box_with_array):
         # GH#43178: nan multiplier still gives NaT through the new float path
-        tdi = pd.TimedeltaIndex([pd.Timedelta(1, "ns"), pd.Timedelta(2, "ns")])
+        tdi = pd.TimedeltaIndex(
+            [pd.Timedelta(1, input_unit="ns"), pd.Timedelta(2, input_unit="ns")]
+        )
         tdi = tm.box_expected(tdi, box_with_array)
 
         expected = pd.TimedeltaIndex([pd.NaT, pd.NaT], dtype="m8[ns]")
@@ -1734,10 +1747,10 @@ class TestTimedeltaArraylikeMulDivOps:
     def test_td64arr_mul_preserves_nat(self, box_with_array):
         # GH#43178: NaT is preserved (not corrupted) through the overflow-safe
         #  int and float multiplication paths.
-        tdi = pd.TimedeltaIndex([pd.Timedelta(5, "ns"), pd.NaT])
+        tdi = pd.TimedeltaIndex([pd.Timedelta(5, input_unit="ns"), pd.NaT])
         tdi = tm.box_expected(tdi, box_with_array)
 
-        expected = pd.TimedeltaIndex([pd.Timedelta(10, "ns"), pd.NaT])
+        expected = pd.TimedeltaIndex([pd.Timedelta(10, input_unit="ns"), pd.NaT])
         expected = tm.box_expected(expected, box_with_array)
 
         tm.assert_equal(tdi * 2, expected)
@@ -1746,7 +1759,9 @@ class TestTimedeltaArraylikeMulDivOps:
     def test_td64arr_div_float_overflow(self, box_with_array):
         # GH#43178: float division whose quotient exceeds int64 bounds must
         #  raise instead of silently saturating
-        tdi = pd.TimedeltaIndex([pd.Timedelta(2**62, "ns"), pd.Timedelta(2**62, "ns")])
+        tdi = pd.TimedeltaIndex(
+            [pd.Timedelta(2**62, input_unit="ns"), pd.Timedelta(2**62, input_unit="ns")]
+        )
         tdi = tm.box_expected(tdi, box_with_array)
 
         msg = "Overflow in timedelta division"
@@ -1764,7 +1779,7 @@ class TestTimedeltaArraylikeMulDivOps:
     def test_td64arr_div_float_zero_nan_still_nat(self, box_with_array):
         # GH#43178: overflow detection must not change numpy's NaT results
         #  for zero or NaN float divisors
-        tdi = pd.TimedeltaIndex([pd.Timedelta(2**62, "ns"), pd.NaT])
+        tdi = pd.TimedeltaIndex([pd.Timedelta(2**62, input_unit="ns"), pd.NaT])
         tdi = tm.box_expected(tdi, box_with_array)
 
         expected = pd.TimedeltaIndex([pd.NaT, pd.NaT], dtype="m8[ns]")

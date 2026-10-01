@@ -928,7 +928,7 @@ def test_tz_aware_fill_value_still_rejected():
     [
         pd.Timestamp("2016-01-01 00:00:00.000000001"),
         pd.Timestamp("2016-01-01", tz="US/Pacific"),
-        pd.Timedelta(1, "ns"),
+        pd.Timedelta(1, input_unit="ns"),
     ],
 )
 def test_object_subtype_boxed_fill_value(fill_value):
@@ -1084,7 +1084,7 @@ def test_fillna_datetimelike_value_spellings(kind, unit, spelling):
             "string": "2020-01-02",
         }
     else:
-        fill = pd.Timedelta(1, unit="s").as_unit(unit)
+        fill = pd.Timedelta(1, input_unit="s").as_unit(unit)
         spellings = {
             "boxed": fill,
             "numpy": fill.asm8,

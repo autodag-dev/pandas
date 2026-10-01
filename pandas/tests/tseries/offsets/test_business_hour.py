@@ -961,7 +961,7 @@ class TestBusinessHour:
     def test_bday_ignores_timedeltas(self, unit, td_unit):
         # GH#55608
         idx = pd.date_range("2010/02/01", "2010/02/10", freq="12h", unit=unit)
-        td = Timedelta(3, unit="h").as_unit(td_unit)
+        td = Timedelta(3, input_unit="h").as_unit(td_unit)
         off = BDay(offset=td)
         t1 = idx + off
 
@@ -1000,7 +1000,7 @@ class TestBusinessHour:
     def test_add_bday_offset_nanos(self):
         # GH#55608
         idx = pd.date_range("2010/02/01", "2010/02/10", freq="12h", unit="ns")
-        off = BDay(offset=Timedelta(3, unit="ns"))
+        off = BDay(offset=Timedelta(3, input_unit="ns"))
 
         result = idx + off
         expected = pd.DatetimeIndex([x + off for x in idx])

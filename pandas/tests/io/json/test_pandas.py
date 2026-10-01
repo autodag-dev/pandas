@@ -1041,7 +1041,10 @@ class TestPandasContainer:
             (pd.DataFrame({"A": [True, False, False]}), None),
             (
                 pd.DataFrame(
-                    {"A": ["a", "b", "c"], "B": pd.to_timedelta(np.arange(3), unit="D")}
+                    {
+                        "A": ["a", "b", "c"],
+                        "B": pd.to_timedelta(np.arange(3), input_unit="D"),
+                    }
                 ),
                 Pandas4Warning,
             ),
@@ -1063,7 +1066,8 @@ class TestPandasContainer:
             ),
             (
                 pd.DataFrame(
-                    {"A": [1, 2, 3]}, index=pd.to_timedelta(np.arange(3), unit="D")
+                    {"A": [1, 2, 3]},
+                    index=pd.to_timedelta(np.arange(3), input_unit="D"),
                 ),
                 Pandas4Warning,
             ),

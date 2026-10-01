@@ -36,7 +36,9 @@ class TestPeriodIndexOps:
         # GH#17157
         index = pd.period_range(freq="M", start="2016-01-01", end="2016-05-31")
         expected_index = pd.date_range("2016-01-01", end="2016-05-31", freq="ME")
-        expected_index += pd.Timedelta(1, "D") - pd.Timedelta(1, "us")
+        expected_index += pd.Timedelta(1, input_unit="D") - pd.Timedelta(
+            1, input_unit="us"
+        )
         tm.assert_index_equal(index.end_time, expected_index)
 
     @pytest.mark.filterwarnings(r"ignore:PeriodDtype\[B\] is deprecated:FutureWarning")
@@ -49,7 +51,9 @@ class TestPeriodIndexOps:
         result = pi.end_time
 
         dti = pd.date_range("1990-01-05", freq="D", periods=1)._with_freq(None)
-        expected = dti + pd.Timedelta(1, "D") - pd.Timedelta(1, "us")
+        expected = (
+            dti + pd.Timedelta(1, input_unit="D") - pd.Timedelta(1, input_unit="us")
+        )
         tm.assert_index_equal(result, expected)
 
 
