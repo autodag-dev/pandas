@@ -6,6 +6,7 @@ further arguments when parsing.
 """
 
 from decimal import Decimal
+import gzip
 from io import (
     BytesIO,
     StringIO,
@@ -24,6 +25,7 @@ from pandas._libs.hashtable import get_hashtable_trace_domain
 from pandas.compat import WASM
 from pandas.errors import (
     DtypeWarning,
+    EmptyDataError,
     Pandas4Warning,
     ParserError,
     ParserWarning,
@@ -1899,3 +1901,131 @@ def test_unparseable_dtype_names_offending_value(
 
     with pytest.raises(ValueError, match=re.escape(repr(offender))):
         parser.read_csv(StringIO(data), sep=";", dtype={"b": dtype}, **kwargs)
+
+
+_SNIFF_EXPECTED = pd.DataFrame(
+    {"A": [1, 3], "B": [2, 4]}, index=pd.Index(["foo", "bar"], name="index")
+)
+
+
+@pytest.mark.parametrize("as_bytes", [True, False])
+@pytest.mark.parametrize(
+    "data,kwargs",
+    [
+        ("index|A|B\nfoo|1|2\nbar|3|4\n", {}),
+        ("index|A|B\r\nfoo|1|2\r\nbar|3|4\r\n", {}),
+        ("\nindex|A|B\nfoo|1|2\nbar|3|4\n", {}),
+        ("#a,b\nindex|A|B#c,d\n#e\nfoo|1|2\nbar|3|4\n", {"comment": "#"}),
+        ("a,b\nc,d\nindex|A|B\nfoo|1|2\nbar|3|4\n", {"skiprows": 2}),
+        ("a,b\nindex|A|B\nfoo|1|2\nbar|3|4\n", {"skiprows": lambda x: x == 0}),
+    ],
+)
+def test_sniff_delimiter(c_parser_only, data, kwargs, as_bytes):
+    # GH#9645 sniff from the first row not skipped, blank or commented
+    parser = c_parser_only
+    buf = BytesIO(data.encode()) if as_bytes else StringIO(data)
+    result = parser.read_csv(buf, sep=None, index_col=0, **kwargs)
+    tm.assert_frame_equal(result, _SNIFF_EXPECTED)
+
+
+class _NonSeekableBytesIO(BytesIO):
+    def seekable(self):
+        return False
+
+    def seek(self, *args):
+        raise OSError("not seekable")
+
+    def tell(self):
+        raise OSError("not seekable")
+
+
+@pytest.mark.parametrize("buf_cls", [BytesIO, _NonSeekableBytesIO])
+@pytest.mark.parametrize("chunk_size", [1, 2, 4])
+def test_sniff_delimiter_small_reads(c_parser_only, monkeypatch, chunk_size, buf_cls):
+    # GH#9645 lines, including "\r\n", split across the reads made while
+    # sniffing; a non-seekable handle has the data read replayed to the parser
+    monkeypatch.setattr("pandas.io.parsers.readers._SNIFF_CHUNK_SIZE", chunk_size)
+    parser = c_parser_only
+    data = "a,b\r\nc,d\r\nindex|A|B\r\nfoo|1|2\r\nbar|3|4\r\n"
+    result = parser.read_csv(buf_cls(data.encode()), sep=None, index_col=0, skiprows=2)
+    tm.assert_frame_equal(result, _SNIFF_EXPECTED)
+
+
+@pytest.mark.parametrize("encoding", [None, "latin-1"])
+def test_sniff_delimiter_gzip_non_seekable(c_parser_only, encoding):
+    # GH#9645 GzipFile.seekable() is True even when its source cannot seek;
+    # enough rows that seeking back is not served from the GzipFile's buffer
+    parser = c_parser_only
+    data = gzip.compress(b"a|b\n" + b"1|2\n" * 100_000)
+    result = parser.read_csv(
+        _NonSeekableBytesIO(data), compression="gzip", sep=None, encoding=encoding
+    )
+    expected = pd.DataFrame({"a": [1] * 100_000, "b": [2] * 100_000})
+    tm.assert_frame_equal(result, expected)
+
+
+def test_sniff_delimiter_text_handle_non_ascii(c_parser_only):
+    # GH#9645 non-ASCII text handle larger than one sniffing read
+    parser = c_parser_only
+    data = "a;b\n" + "\u00e9;1\n" * 20_000
+    result = parser.read_csv(StringIO(data), sep=None)
+    expected = pd.DataFrame({"a": ["\u00e9"] * 20_000, "b": [1] * 20_000})
+    tm.assert_frame_equal(result, expected)
+
+
+def test_sniff_delimiter_mid_stream(c_parser_only):
+    # GH#9645 a seekable handle is rewound to where it was, not to the start
+    parser = c_parser_only
+    buf = BytesIO(b"junk\nindex|A|B\nfoo|1|2\nbar|3|4\n")
+    buf.readline()
+    result = parser.read_csv(buf, sep=None, index_col=0)
+    tm.assert_frame_equal(result, _SNIFF_EXPECTED)
+
+
+def test_sniff_delimiter_chunksize(c_parser_only):
+    # GH#9645
+    parser = c_parser_only
+    data = "index|A|B\nfoo|1|2\nbar|3|4\n"
+    with parser.read_csv(StringIO(data), sep=None, index_col=0, chunksize=1) as reader:
+        result = pd.concat(reader)
+    tm.assert_frame_equal(result, _SNIFF_EXPECTED)
+
+
+@pytest.mark.parametrize("key", ["sep", "delimiter"])
+def test_sniff_delimiter_default_engine(key):
+    # GH#9645 the default engine sniffs rather than falling back to python
+    with tm.assert_produces_warning(None):
+        result = pd.read_csv(StringIO("a;b\n1;2\n"), **{key: None})
+    expected = pd.DataFrame({"a": [1], "b": [2]})
+    tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("data", ["", "a,b\n", "#a,b\n"])
+def test_sniff_delimiter_no_rows(c_parser_only, data):
+    # GH#9645
+    parser = c_parser_only
+    with pytest.raises(EmptyDataError, match="No columns to parse from file"):
+        parser.read_csv(StringIO(data), sep=None, skiprows=1, comment="#")
+
+
+def test_sniff_delimiter_multibyte(c_parser_only):
+    # GH#9645 the c engine only supports single-byte separators
+    parser = c_parser_only
+    data = '"a"\u00a7"b"\n"1"\u00a7"2"\n'
+    msg = "sep=None detected the separator '\u00a7'"
+    with pytest.raises(ValueError, match=msg):
+        parser.read_csv(StringIO(data), sep=None)
+
+
+def test_sniff_delimiter_lone_surrogate(c_parser_only):
+    # GH#9645
+    parser = c_parser_only
+    data = b'"a"\x80"b"\n"1"\x80"2"\n'
+    msg = r"sep=None detected the separator '\\udc80'"
+    with pytest.raises(ValueError, match=msg):
+        parser.read_csv(
+            BytesIO(data),
+            sep=None,
+            encoding="ascii",
+            encoding_errors="surrogateescape",
+        )

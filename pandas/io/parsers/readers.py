@@ -14,10 +14,12 @@ from collections import (
 from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import csv
+import gzip
 import io
 import mmap
 import os
 import queue
+import re
 import sys
 from typing import (
     IO,
@@ -81,6 +83,7 @@ from pandas.core.internals.managers import BlockManager
 
 from pandas.io.common import (
     IOHandles,
+    _BytesIOWrapper,
     get_handle,
     infer_compression,
     stringify_path,
@@ -106,6 +109,7 @@ if TYPE_CHECKING:
         Callable,
         Hashable,
         Iterable,
+        Iterator,
         Mapping,
         Sequence,
     )
@@ -257,6 +261,10 @@ _PARALLEL_TAPER_RATIO = 0.2
 # avoids oversubscribing the machine.  mode.max_threads overrides it in either
 # direction.
 _MAX_DEFAULT_WORKERS = 6
+
+# bytes read per call while looking for the row to sniff for sep=None
+_SNIFF_CHUNK_SIZE = 64 * 1024
+
 _pyarrow_unsupported = {
     "skipfooter",
     "float_precision",
@@ -574,9 +582,9 @@ def _can_parallelize_csv(filepath_or_buffer, kwds: dict) -> bool:
         if codec_name not in ("utf-8", "utf-8-sig"):
             return False
 
-    # Separators that force the python-engine fallback inside TextFileReader
-    # (sep=None sniffing, or multi-char/regex seps other than r"\s+") cannot
-    # use the C-engine buffer-loading fast path.
+    # sep=None is only resolved once TextFileReader opens the file, and
+    # multi-char/regex seps other than r"\s+" force the python engine, so
+    # neither can use the C-engine buffer-loading fast path.
     delimiter = kwds.get("delimiter", ",")
     if delimiter is None or (len(delimiter) > 1 and delimiter != r"\s+"):
         return False
@@ -1430,8 +1438,7 @@ def read_csv(
     sep : str, default ','
         Character or regex pattern to treat as the delimiter. ``sep=None`` detects
         the separator from the first valid row of the file with Python's builtin
-        sniffer tool, ``csv.Sniffer``; it is supported only by the Python parsing
-        engine, which will be used automatically.
+        sniffer tool, ``csv.Sniffer``; the pyarrow engine does not support it.
         In addition, separators longer than 1 character and different from
         ``'\\s+'`` will be interpreted as regular expressions and will force
         the use of the Python parsing engine. Note that regex delimiters are prone
@@ -2038,8 +2045,7 @@ def read_table(
     sep : str, default '\\t' (tab-stop)
         Character or regex pattern to treat as the delimiter. ``sep=None`` detects
         the separator from the first valid row of the file with Python's builtin
-        sniffer tool, ``csv.Sniffer``; it is supported only by the Python parsing
-        engine, which will be used automatically.
+        sniffer tool, ``csv.Sniffer``; the pyarrow engine does not support it.
         In addition, separators longer than 1 character and different from
         ``'\\s+'`` will be interpreted as regular expressions and will force
         the use of the Python parsing engine. Note that regex delimiters are prone
@@ -2864,8 +2870,8 @@ class TextFileReader(abc.Iterator):
         sep = options["delimiter"]
 
         if sep is None:
-            # sniffing the separator with csv.Sniffer is python-engine only
-            if engine in ("c", "pyarrow"):
+            # the c engine sniffs the separator in _make_engine
+            if engine == "pyarrow":
                 fallback_reason = f"the '{engine}' engine does not support sep=None"
                 engine = "python"
         elif len(sep) > 1:
@@ -3052,11 +3058,68 @@ class TextFileReader(abc.Iterator):
             raise ValueError(msg)
 
         try:
+            if (
+                engine == "c"
+                and self.options.get("delimiter", ",") is None
+                and not isinstance(f, list)
+            ):
+                src = self._sniff_delimiter(f)
+                return mapping[engine](src, **self.options)
             return mapping[engine](f, **self.options)
         except Exception:
             if self.handles is not None:
                 self.handles.close()
             raise
+
+    def _sniff_delimiter(self, f: IO) -> IO | _ReplayHandle:
+        """
+        Set the delimiter for ``sep=None`` by sniffing the first row that is not
+        in ``skiprows``, blank or a full-line comment.
+
+        Returns ``f`` rewound to where sniffing started or, if ``f`` cannot seek,
+        a handle that replays the data read here and then the rest of ``f``.
+        """
+        skiprows = self.options["skiprows"]
+        skipfunc = skiprows if callable(skiprows) else skiprows.__contains__
+        comment = self.options["comment"]
+        try:
+            start = f.tell() if _can_seek(f) else None
+        except (AttributeError, OSError):
+            # e.g. read-only buffers lacking seekable() or tell()
+            start = None
+        chunks: list = []
+        delimiter = None
+        for pos, raw in enumerate(
+            _iter_physical_lines(
+                f, chunks if start is None else None, self.options["lineterminator"]
+            )
+        ):
+            if skipfunc(pos) or not raw:
+                continue
+            line = raw.decode("utf-8-sig", "replace") if isinstance(raw, bytes) else raw
+            line += "\n"
+            if comment is not None and comment in line:
+                line = line[: line.find(comment)]
+                if not line:
+                    continue
+            delimiter = csv.Sniffer().sniff(line).delimiter
+            break
+
+        if delimiter is None:
+            # nothing to sniff; the c engine reports the empty file
+            delimiter = ","
+        elif len(delimiter.encode("utf-8", "surrogatepass")) > 1:
+            raise ValueError(
+                f"sep=None detected the separator {delimiter!r}, which the 'c' "
+                "engine does not support as it is more than one byte in utf-8; "
+                "specify engine='python'."
+            )
+        self.options["delimiter"] = delimiter
+        if start is not None:
+            f.seek(start)
+            return f
+        prefix = chunks[0][:0].join(chunks) if chunks else b""
+        return _ReplayHandle(prefix, f)
 
     def _failover_to_python(self) -> None:
         raise AbstractMethodError(self)
@@ -3603,3 +3666,78 @@ def _validate_skipfooter(kwds: dict[str, Any]) -> None:
             raise ValueError("'skipfooter' not supported for iteration")
         if kwds.get("nrows"):
             raise ValueError("'skipfooter' not supported with 'nrows'")
+
+
+def _iter_physical_lines(
+    handle: IO, chunks: list | None, lineterminator: str | None
+) -> Iterator[bytes | str]:
+    """
+    Yield each line of ``handle`` without its terminator, appending every chunk
+    read to ``chunks`` if it is not None.
+    """
+    eol: re.Pattern | None = None
+    partial: list = []
+    skip_lf = False
+    while True:
+        chunk = handle.read(_SNIFF_CHUNK_SIZE)
+        if not chunk:
+            tail = partial[0][:0].join(partial) if partial else ""
+            if tail:
+                yield tail
+            return
+        if chunks is not None:
+            chunks.append(chunk)
+        if eol is None:
+            pattern = re.escape(lineterminator) if lineterminator else r"\r\n|\r|\n"
+            eol = re.compile(pattern.encode() if isinstance(chunk, bytes) else pattern)
+        start = 0
+        if skip_lf and chunk[:1] in (b"\n", "\n"):
+            # the second half of a "\r\n" split across chunks
+            start = 1
+        for match in eol.finditer(chunk, start):
+            partial.append(chunk[start : match.start()])
+            yield chunk[:0].join(partial)
+            partial = []
+            start = match.end()
+        partial.append(chunk[start:])
+        skip_lf = not lineterminator and chunk[-1:] in (b"\r", "\r")
+
+
+def _can_seek(handle: IO) -> bool:
+    """
+    Whether ``handle`` can seek back, checking the source of a ``GzipFile``,
+    whose ``seekable()`` is True even when its source cannot seek.
+    """
+    if isinstance(handle, _BytesIOWrapper):
+        # seeking its text buffer would not discard already-encoded overflow bytes
+        return False
+    source: Any = handle.buffer if isinstance(handle, io.TextIOWrapper) else handle
+    if isinstance(source, gzip.GzipFile) and source.fileobj is not None:
+        source = source.fileobj
+    return handle.seekable() and source.seekable()
+
+
+class _ReplayHandle:
+    """
+    Serve ``prefix`` and then the rest of ``handle`` through ``read``, the only
+    method the c engine calls on its source.
+    """
+
+    def __init__(self, prefix: bytes | str, handle: IO) -> None:
+        self._prefix = prefix
+        self._pos = 0
+        self._handle = handle
+
+    def read(self, size: int = -1) -> bytes | str:
+        if self._pos >= len(self._prefix):
+            return self._handle.read(size)
+        if size is None or size < 0:
+            data = self._prefix[self._pos :] + self._handle.read()
+        else:
+            data = self._prefix[self._pos : self._pos + size]
+        self._pos += len(data)
+        if self._pos >= len(self._prefix):
+            # release the prefix memory
+            self._prefix = self._prefix[:0]
+            self._pos = 0
+        return data
