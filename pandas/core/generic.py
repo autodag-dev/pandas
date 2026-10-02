@@ -3798,6 +3798,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
         decimal: str = ...,
         errors: OpenFileErrors = ...,
         storage_options: StorageOptions = ...,
+        excel_sep_hint: bool = ...,
     ) -> str: ...
 
     @overload
@@ -3825,6 +3826,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
         decimal: str = ...,
         errors: OpenFileErrors = ...,
         storage_options: StorageOptions = ...,
+        excel_sep_hint: bool = ...,
     ) -> None: ...
 
     @final
@@ -3852,6 +3854,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
         decimal: str = ".",
         errors: OpenFileErrors = "strict",
         storage_options: StorageOptions | None = None,
+        excel_sep_hint: bool = False,
     ) -> str | None:
         r"""
         Write object to a comma-separated values (csv) file.
@@ -3961,6 +3964,10 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
             details, and for more examples on storage options refer `here
             <https://pandas.pydata.org/docs/user_guide/io.html?
             highlight=storage_options#reading-writing-remote-files>`_.
+        excel_sep_hint : bool, default False
+            If True, prepend a ``sep=<delimiter>`` line before the header row
+            so that Microsoft Excel automatically detects the delimiter when
+            opening the file.
 
         Returns
         -------
@@ -4042,6 +4049,7 @@ class NDFrame(PandasObject, indexing.IndexingMixin):
             doublequote=doublequote,
             escapechar=escapechar,
             storage_options=storage_options,
+            excel_sep_hint=excel_sep_hint,
         )
 
     # ----------------------------------------------------------------------
