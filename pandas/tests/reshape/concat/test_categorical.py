@@ -1,7 +1,17 @@
-from datetime import datetime
+from datetime import (
+    datetime,
+    timedelta,
+)
+from decimal import Decimal
+from enum import (
+    IntEnum,
+    StrEnum,
+)
 
 import numpy as np
+import pytest
 
+from pandas.compat.numpy import np_version_gt2_2
 from pandas.errors import Pandas4Warning
 
 from pandas.core.dtypes.dtypes import CategoricalDtype
@@ -591,3 +601,210 @@ def test_union_categories_dataframe_multiple_categorical_columns():
         }
     )
     tm.assert_frame_equal(result, expected)
+
+
+def test_union_categories_bool_and_numeric_categories():
+    # GH#68440 True and 1 cannot both be categories of an object-dtype Index, so
+    #  the result falls back to object rather than losing one of them
+    s1 = pd.Series(pd.Categorical([1, 2, 3]))
+    s2 = pd.Series(pd.Categorical([True, False]))
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(np.array([1, 2, 3, True, False], dtype=object))
+    tm.assert_series_equal(result, expected)
+
+
+def test_union_categories_bool_and_numeric_object_categories():
+    # GH#68440 same conflict, reached with categories that are already object
+    s1 = pd.Series(
+        pd.Categorical([1, 2], dtype=CategoricalDtype(pd.Index([1, 2], dtype=object)))
+    )
+    s2 = pd.Series(
+        pd.Categorical([True], dtype=CategoricalDtype(pd.Index([True], dtype=object)))
+    )
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(np.array([1, 2, True], dtype=object))
+    tm.assert_series_equal(result, expected)
+
+
+def test_union_categories_equal_object_dtypes_still_fall_back():
+    # GH#68440 two object-dtype CategoricalDtypes compare equal whenever their
+    #  categories do, so the dtypes_all_equal fastpath would re-merge exactly
+    #  what the union just rejected
+    s1 = pd.Series(
+        pd.Categorical([1], dtype=CategoricalDtype(pd.Index([1], dtype=object)))
+    )
+    s2 = pd.Series(
+        pd.Categorical([True], dtype=CategoricalDtype(pd.Index([True], dtype=object)))
+    )
+    assert s1.dtype == s2.dtype
+
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+
+    expected = pd.Series(np.array([1, True], dtype=object))
+    tm.assert_series_equal(result, expected)
+
+
+def test_union_categories_equal_object_dtypes_column_missing():
+    # GH#68440 the only shape that rejects the union twice, once for the
+    #  all-NA filler's dtype and once for the concatenation itself
+    d1 = CategoricalDtype(pd.Index([1], dtype=object))
+    d2 = CategoricalDtype(pd.Index([True], dtype=object))
+    df1 = pd.DataFrame({"x": pd.Categorical([1], dtype=d1), "y": [1]})
+    df2 = pd.DataFrame({"x": pd.Categorical([True], dtype=d2), "y": [2]})
+    df3 = pd.DataFrame({"y": [3]})
+    result = pd.concat([df1, df2, df3], ignore_index=True, union_categories=True)
+    expected = pd.DataFrame(
+        {
+            "x": np.array([1, True, np.nan], dtype=object),
+            "y": [1, 2, 3],
+        }
+    )
+    tm.assert_frame_equal(result, expected)
+
+
+class Color(IntEnum):
+    RED = 1
+
+
+class Letter(StrEnum):
+    A = "a"
+
+
+@pytest.mark.parametrize(
+    "values, other",
+    [
+        ([1, 2, 3], Color.RED),
+        (["a", "b"], Letter.A),
+        # a Decimal is kept apart from an equal int so both values stay as given
+        ([1, 2, 3], Decimal("1")),
+    ],
+)
+def test_union_categories_equal_categories_of_different_types(values, other):
+    # GH#68440 these compare and hash equal but are distinct categories
+    s1 = pd.Series(
+        pd.Categorical(values, dtype=CategoricalDtype(pd.Index(values, dtype=object)))
+    )
+    s2 = pd.Series(
+        pd.Categorical([other], dtype=CategoricalDtype(pd.Index([other], dtype=object)))
+    )
+
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+
+    expected = pd.Series([*values, other], dtype=object)
+    tm.assert_series_equal(result, expected)
+    assert type(result.iloc[-1]) is type(other)
+
+
+def test_union_categories_bool_and_numeric_categories_column_missing():
+    # GH#68440 the missing-column route unions the dtypes in _get_empty_dtype,
+    #  so it needs the fallback too
+    df1 = pd.DataFrame({"x": pd.Categorical([1, 2]), "y": [1, 2]})
+    df2 = pd.DataFrame({"x": pd.Categorical([True]), "y": [3]})
+    df3 = pd.DataFrame({"y": [4]})
+    result = pd.concat([df1, df2, df3], ignore_index=True, union_categories=True)
+    expected = pd.DataFrame(
+        {
+            "x": np.array([1, 2, True, np.nan], dtype=object),
+            "y": [1, 2, 3, 4],
+        }
+    )
+    tm.assert_frame_equal(result, expected)
+
+
+def test_union_categories_int_and_float_object_categories():
+    # GH#68440 1 and 1.0 merge, as they do for int64 and float64 categories
+    s1 = pd.Series(
+        pd.Categorical(
+            [1.0, 2.0], dtype=CategoricalDtype(pd.Index([1.0, 2.0], dtype=object))
+        )
+    )
+    s2 = pd.Series(
+        pd.Categorical([1], dtype=CategoricalDtype(pd.Index([1], dtype=object)))
+    )
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(pd.Categorical([1.0, 2.0, 1.0]))
+    tm.assert_series_equal(result, expected)
+
+
+def test_union_categories_uncomparable_categories():
+    # GH#68440 Decimal("1") and np.int64(1) hash equal but raise on ==, so the
+    #  comparison cannot show they are distinct
+    one = Decimal("1")
+    s1 = pd.Series(
+        pd.Categorical([one], dtype=CategoricalDtype(pd.Index([one], dtype=object)))
+    )
+    s2 = pd.Series(
+        pd.Categorical(
+            [np.int64(1)],
+            dtype=CategoricalDtype(pd.Index([np.int64(1)], dtype=object)),
+        )
+    )
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(np.array([one, np.int64(1)], dtype=object))
+    tm.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "np_scalar, py_scalar",
+    [(np.int64(1), 1), (np.float64(1.5), 1.5), (np.bool_(True), True)],
+)
+def test_union_categories_numpy_and_python_scalars(np_scalar, py_scalar):
+    # GH#68440 a NumPy scalar and its Python equivalent are the same category
+    s1 = pd.Series(pd.Categorical(["a", np_scalar]))
+    s2 = pd.Series(
+        pd.Categorical(
+            [py_scalar], dtype=CategoricalDtype(pd.Index([py_scalar], dtype=object))
+        )
+    )
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(pd.Categorical(["a", np_scalar, np_scalar], dtype=s1.dtype))
+    tm.assert_series_equal(result, expected)
+
+
+xfail_np_datetimelike_hash = pytest.mark.xfail(
+    not np_version_gt2_2,
+    reason="np.timedelta64 hashes like Timedelta from numpy 2.2",
+)
+
+
+@pytest.mark.parametrize(
+    "other_scalar, pd_scalar",
+    [
+        (datetime(2020, 1, 1), pd.Timestamp("2020-01-01")),
+        (np.datetime64("2020-01-01"), pd.Timestamp("2020-01-01")),
+        (timedelta(days=1), pd.Timedelta(days=1)),
+        pytest.param(
+            np.timedelta64(1, "D"),
+            pd.Timedelta(days=1),
+            marks=xfail_np_datetimelike_hash,
+        ),
+    ],
+)
+def test_union_categories_datetimelike_scalar_types(other_scalar, pd_scalar):
+    # GH#68440 a Timestamp/Timedelta and its equal Python or NumPy equivalent
+    #  are the same category
+    s1 = pd.Series(pd.Categorical([other_scalar, "a"]))
+    s2 = pd.Series(pd.Categorical([pd_scalar, "b"]))
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(
+        pd.Categorical(
+            [other_scalar, "a", other_scalar, "b"],
+            categories=pd.Index([other_scalar, "a", "b"], dtype=object),
+        )
+    )
+    tm.assert_series_equal(result, expected)
+
+
+def test_union_categories_object_dtype_strings():
+    # GH#68440
+    s1 = pd.Series(
+        pd.Categorical(
+            ["a", "b"], dtype=CategoricalDtype(pd.Index(["a", "b"], dtype=object))
+        )
+    )
+    s2 = pd.Series(
+        pd.Categorical(["c"], dtype=CategoricalDtype(pd.Index(["c"], dtype=object)))
+    )
+    result = pd.concat([s1, s2], ignore_index=True, union_categories=True)
+    expected = pd.Series(pd.Categorical(["a", "b", "c"]))
+    tm.assert_series_equal(result, expected)

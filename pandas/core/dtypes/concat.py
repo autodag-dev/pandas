@@ -4,14 +4,23 @@ Utility functions related to concat.
 
 from __future__ import annotations
 
+from datetime import (
+    datetime,
+    timedelta,
+)
 from typing import (
     TYPE_CHECKING,
+    Any,
     cast,
 )
 
 import numpy as np
 
-from pandas._libs import lib
+from pandas._libs import (
+    Timedelta,
+    Timestamp,
+    lib,
+)
 from pandas.util._decorators import set_module
 
 from pandas.core.dtypes.astype import astype_array
@@ -85,9 +94,15 @@ def concat_compat(
         and len(to_concat)
         and all(isinstance(x.dtype, CategoricalDtype) for x in to_concat)
     ):
-        return union_categories_compat(cast("Sequence[Categorical]", to_concat))
+        unioned = union_categories_compat(cast("Sequence[Categorical]", to_concat))
+        if unioned is not None:
+            return unioned
+        # GH#68440 the categories cannot be merged, and the fastpath below would
+        #  merge them anyway: two object-dtype CategoricalDtypes compare equal
+        #  whenever their categories do, which is what was just rejected
+        to_concat = [x.astype(object) for x in to_concat]
 
-    if len(to_concat) and lib.dtypes_all_equal([obj.dtype for obj in to_concat]):
+    if to_concat and lib.dtypes_all_equal([obj.dtype for obj in to_concat]):
         # fastpath!
         obj = to_concat[0]
         if isinstance(obj, np.ndarray):
@@ -148,14 +163,83 @@ def concat_compat(
     return result
 
 
-def union_categories_compat(to_union: Sequence[Categorical]) -> Categorical:
+# plain real and complex numbers; excludes bool and np.timedelta64
+_NUMBER_TYPES = {int, float, complex} | {
+    np.dtype(code).type
+    for code in np.typecodes["AllInteger"] + np.typecodes["AllFloat"]
+}
+
+
+def _category_kind(cat: Any) -> Any:
+    """
+    Categories from different inputs that compare equal merge only if they
+    are of the same kind.
+
+    Plain numbers are one kind, so 1 and 1.0 merge as they do for int64 and
+    float64 categories; likewise Timestamp, np.datetime64 and datetime, and
+    Timedelta, np.timedelta64 and timedelta. Any other type is its own kind,
+    so True and 1, an IntEnum and an int, or a Decimal and an int are kept
+    apart.
+    """
+    cat_type = type(cat)
+    if cat_type in _NUMBER_TYPES:
+        return "number"
+    if cat_type is np.bool_:
+        return bool
+    if cat_type is np.str_:
+        return str
+    if cat_type is Timestamp or cat_type is np.datetime64:
+        return datetime
+    if cat_type is Timedelta or cat_type is np.timedelta64:
+        return timedelta
+    return cat_type
+
+
+def _categories_would_collide(to_union: Sequence[Categorical]) -> bool:
+    """
+    Whether any of these object-dtype categories appears under two different
+    kinds (see _category_kind), e.g. True and 1, which compare and hash equal.
+    """
+    # a single categories Index cannot collide with itself: Categorical rejects
+    #  categories that are not unique, and uniqueness is checked by hash
+    distinct = {id(obj.categories): obj.categories for obj in to_union}
+    if len(distinct) < 2:
+        return False
+
+    if all(
+        set(map(type, categories)) <= {str, np.str_} for categories in distinct.values()
+    ):
+        # GH#68440 str/np.str_ can't collide, so skip the scan below; `<=`
+        #  excludes str subclasses like StrEnum, which are their own kind
+        #  (see _category_kind).
+        return False
+
+    seen: dict[Any, Any] = {}
+    for categories in distinct.values():
+        for cat in categories:
+            kind = _category_kind(cat)
+            try:
+                if seen.setdefault(cat, kind) != kind:
+                    return True
+            except Exception:
+                # a comparison that raises, e.g. Decimal("1") == np.int64(1),
+                #  cannot show that the two are distinct
+                return True
+    return False
+
+
+def union_categories_compat(to_union: Sequence[Categorical]) -> Categorical | None:
     """
     union_categoricals for concat(union_categories=True).
 
     Unlike union_categoricals, categories with differing dtypes are cast to a
     common dtype instead of raising, so that an all-categorical concatenation
-    always returns a Categorical.  Orderedness is preserved only if every input
-    shares the same dtype after this cast.
+    returns a Categorical.  Orderedness is preserved only if every input shares
+    the same dtype after this cast.
+
+    Returns None when equal categories are of different kinds (see
+    _category_kind), e.g. True and 1, or cannot be compared; the caller
+    then casts to object.
     """
     from pandas import Categorical
     from pandas.core.arrays.categorical import recode_for_categories
@@ -180,6 +264,15 @@ def union_categories_compat(to_union: Sequence[Categorical]) -> Categorical:
                 Categorical._simple_new(codes, CategoricalDtype(cats, obj.ordered))
             )
         to_union = recast
+
+    if (
+        len(to_union) > 1
+        and to_union[0].categories.dtype == object
+        and _categories_would_collide(to_union)
+    ):
+        # GH#68440 categories must be unique, and True and 1 are not distinct
+        #  by hash, so there is no Categorical to return
+        return None
 
     ignore_order = not lib.dtypes_all_equal([x.dtype for x in to_union])
     return union_categoricals(to_union, ignore_order=ignore_order)
