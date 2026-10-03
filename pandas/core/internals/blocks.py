@@ -1784,19 +1784,31 @@ class EABackedBlock(Block):
             #  misinterpret it as a cast failure. Also covers 3rd-party EAs,
             #  whose __setitem__ does not check the flag.
             raise ValueError("Cannot modify read-only array")
+        target = values
         if values.ndim == 2:
-            # GH#45419 Adapt indexer/value to storage layout (nblocks, nrows)
-            #  instead of transposing values, since EA.T may not be a view.
-            if not isinstance(indexer, tuple):
-                indexer = (indexer, slice(None))
-            if len(indexer) == 2:
-                indexer = indexer[::-1]
-            if isinstance(value, np.ndarray) and value.ndim == 2:
-                value = value.T
-        check_setitem_lengths(indexer, value, values)
+            if isinstance(self, NDArrayBackedExtensionBlock):
+                # GH#68521 .T is a view here, so write through it with the key
+                #  in frame order and let numpy do the broadcasting
+                target = values.T
+                if not isinstance(indexer, tuple):
+                    # a 0-d ndarray key breaks EA.__setitem__; a tuple avoids it
+                    indexer = (indexer,)
+            else:
+                # GH#45419 Adapt indexer/value to storage layout (nblocks, nrows)
+                #  instead of transposing values, since EA.T may not be a view.
+                if not isinstance(indexer, tuple):
+                    indexer = (indexer, slice(None))
+                if len(indexer) == 2:
+                    indexer = indexer[::-1]
+                if isinstance(value, np.ndarray) and value.ndim == 2:
+                    value = value.T
+        else:
+            # GH#68521 check_setitem_lengths's checks are gated on
+            #  values.ndim == 1, so it is a no-op for a 2-D block
+            check_setitem_lengths(indexer, value, values)
 
         try:
-            values[indexer] = value
+            target[indexer] = value
         except (ValueError, TypeError):
             if isinstance(self.dtype, IntervalDtype):
                 # see TestSetitemFloatIntervalWithIntIntervalValues
@@ -1804,6 +1816,13 @@ class EABackedBlock(Block):
                 return nb.setitem(orig_indexer, orig_value)
 
             elif isinstance(self, NDArrayBackedExtensionBlock):
+                if values.ndim == 2 and _unbroadcastable_shape(target, indexer, value):
+                    # GH#68521 not for a 1D block: that would change the
+                    #  exception type of Series setitem; see
+                    #  test_iloc_setitem_1d_ea_block_shape_mismatch_keeps_its_message
+                    # target is values.T, already in frame order, so err's own
+                    #  message reports the shape mismatch correctly
+                    raise
                 nb = self.coerce_to_target_dtype(orig_value, raise_on_upcast=True)
                 return nb.setitem(orig_indexer, orig_value)
 
@@ -2325,6 +2344,29 @@ class DatetimeLikeBlock(NDArrayBackedExtensionBlock):
     __slots__ = ()
     is_numeric = False
     values: DatetimeArray | TimedeltaArray
+
+
+def _unbroadcastable_shape(values: ArrayLike, indexer, value) -> bool:
+    """
+    Whether ``value`` cannot be broadcast into ``values[indexer]``.
+
+    Returns False both when the value does fit and when that cannot be
+    determined, so a caller can only use a True result to conclude a failed
+    setitem is a shape problem rather than a dtype one.
+    """
+    try:
+        target_shape = np.shape(values[indexer])
+        value_shape = np.shape(value)
+    except (IndexError, TypeError, ValueError):
+        return False
+    # assignment also drops leading length-1 axes of the value, which
+    #  broadcasting on its own does not, e.g. ``arr[0] = np.array([x])``
+    while len(value_shape) > len(target_shape) and value_shape[0] == 1:
+        value_shape = value_shape[1:]
+    try:
+        return np.broadcast_shapes(target_shape, value_shape) != target_shape
+    except ValueError:
+        return True
 
 
 # -----------------------------------------------------------------
