@@ -253,6 +253,18 @@ def test_astype_nullable_int(dtype):
     tm.assert_extension_array_equal(result, expected)
 
 
+def test_astype_nullable_boolean(dtype):
+    # GH#40566
+    arr = pd.array(["True", "false", "1", "0.0", pd.NA], dtype=dtype)
+    result = arr.astype("boolean")
+    expected = pd.array([True, False, True, False, pd.NA], dtype="boolean")
+    tm.assert_extension_array_equal(result, expected)
+
+    arr = pd.array(["True", "", pd.NA], dtype=dtype)
+    with pytest.raises(ValueError, match="cannot be cast to bool"):
+        arr.astype("boolean")
+
+
 def test_astype_float(dtype, any_float_dtype):
     # Don't compare arrays (37974)
     ser = pd.Series(["1.1", pd.NA, "3.3"], dtype=dtype)
