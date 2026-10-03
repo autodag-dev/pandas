@@ -1962,9 +1962,9 @@ class IncompatibleFrequency(TypeError):
     """
     Raised when trying to compare or operate between Periods with different frequencies.
 
-    This error occurs when performing operations between Period objects or
-    PeriodArrays that have different frequencies that cannot be aligned,
-    such as comparing or doing arithmetic on periods with mismatched frequencies.
+    Ordering comparisons and subtraction between Periods with different
+    frequencies raise this error, as does adding an offset that does not match a
+    Period's frequency. Equality comparisons return False.
 
     See Also
     --------
@@ -1974,7 +1974,7 @@ class IncompatibleFrequency(TypeError):
 
     Examples
     --------
-    Trying to compare Period objects with different frequencies:
+    Subtracting Period objects with different frequencies:
 
     >>> pd.Period("2024-01", freq="M") - pd.Period("2024-01-01", freq="D")
     Traceback (most recent call last):
@@ -2104,9 +2104,8 @@ cdef class _Period(PeriodMixin):
         Return the integer ordinal for this Period.
 
         The ordinal is the internal integer representation of the Period,
-        representing its position in the sequence of periods of the given
-        frequency. It counts from an epoch (e.g., for daily frequency,
-        ordinal 0 corresponds to January 1, 1970).
+        counting periods of the frequency's base unit from an epoch (e.g., for
+        daily frequency, ordinal 0 corresponds to January 1, 1970).
 
         See Also
         --------
@@ -2369,8 +2368,8 @@ cdef class _Period(PeriodMixin):
         """
         Convert Period to desired frequency, at the start or end of the interval.
 
-        This method converts the Period to a different frequency, aligning
-        the result to either the start or end of the original interval.
+        The result is aligned to the start or end of the original interval,
+        as set by `how`.
 
         Parameters
         ----------
@@ -2455,8 +2454,8 @@ cdef class _Period(PeriodMixin):
         Parameters
         ----------
         freq : str or DateOffset
-            Target frequency. Default is 'D' if self._freq is week or
-            longer and 'S' otherwise.
+            Target frequency. Default is 'D' if the frequency of this Period is
+            weekly or longer and 'S' otherwise.
         how : {'start', 'end', 's', 'e'}, default 'start'
             Whether to use the start or end of the period. Case-insensitive.
 
@@ -2524,8 +2523,8 @@ cdef class _Period(PeriodMixin):
         """
         Return the year this Period falls on.
 
-        The year is derived from the internal representation of the Period
-        based on its ordinal value and frequency.
+        For fiscal-year and week-anchored frequencies this can differ from the
+        calendar year of the period's start; see Notes.
 
         Returns
         -------
