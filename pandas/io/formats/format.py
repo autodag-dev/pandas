@@ -1001,6 +1001,7 @@ class DataFrameRenderer:
         escapechar: str | None = None,
         errors: str = "strict",
         storage_options: StorageOptions | None = None,
+        excel_sep_hint: bool = False,
     ) -> str | None:
         """
         Render dataframe as comma-separated file.
@@ -1030,6 +1031,7 @@ class DataFrameRenderer:
             doublequote=doublequote,
             escapechar=escapechar,
             storage_options=storage_options,
+            excel_sep_hint=excel_sep_hint,
             formatter=self.fmt,
         )
         csv_formatter.save()
