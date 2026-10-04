@@ -1692,6 +1692,8 @@ class SeriesApply(NDFrameApply):
         func: AggFuncType,
         *,
         by_row: Literal[False, "compat", "_compat"] = "compat",
+        engine: Literal["python", "numba"] | None = None,
+        engine_kwargs: dict[str, Any] | None = None,
         args,
         kwargs,
     ) -> None:
@@ -1701,6 +1703,8 @@ class SeriesApply(NDFrameApply):
             raw=False,
             result_type=None,
             by_row=by_row,
+            engine=engine or "python",
+            engine_kwargs=engine_kwargs,
             args=args,
             kwargs=kwargs,
         )
@@ -1773,6 +1777,17 @@ class SeriesApply(NDFrameApply):
                 return func(obj, *self.args, **self.kwargs)
         elif not self.by_row:
             return func(obj, *self.args, **self.kwargs)
+
+        if not self.args and not self.kwargs:
+            from pandas.core.util.numba_ import maybe_run_numba_apply
+
+            res_arr = maybe_run_numba_apply(
+                obj, func, engine=self.engine, engine_kwargs=self.engine_kwargs
+            )
+            if res_arr is not None:
+                return obj._constructor(res_arr, index=obj.index).__finalize__(
+                    obj, method="apply"
+                )
 
         if self.args or self.kwargs:
             # _map_values does not support args/kwargs
