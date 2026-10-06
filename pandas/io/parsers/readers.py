@@ -255,16 +255,6 @@ _PARALLEL_MAX_COLUMN_PIECES = 1800
 # disables the taper.
 _PARALLEL_TAPER_RATIO = 0.2
 
-def _is_thread_affinity_error(exc: BaseException) -> bool:
-    """Return whether an exception message indicates thread affinity."""
-    message = str(exc).lower()
-    return (
-        ("created in a thread" in message and "same thread" in message)
-        or "thread affinity" in message
-        or "thread-affine" in message
-    )
-
-
 # Ceiling on the *default* parallel-read worker count: parallel CSV reading
 # sees diminishing returns beyond a handful of workers, and a low default
 # avoids oversubscribing the machine.  mode.max_threads overrides it in either
@@ -1161,12 +1151,11 @@ def _read_csv_chunks(
                 try:
                     fut.result()
                 except Exception as err:
-                    if _is_thread_affinity_error(err):
+                    if kwds.get("converters"):
                         err.add_note(
-                            "The converter raised a thread-affinity error while "
-                            "running in a parallel parser worker. Use a thread-safe "
-                            "resource in the converter or disable parallel CSV "
-                            "reading with mode.max_threads=1."
+                            "A converter raised an exception while running in a "
+                            "parallel parser worker. If the converter uses "
+                            "thread-affine state, use mode.max_threads=1."
                         )
                     raise
 
