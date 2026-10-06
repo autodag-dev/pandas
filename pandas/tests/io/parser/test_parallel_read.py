@@ -10,7 +10,8 @@ The parallel path is enabled automatically when:
 We test correctness (parallel == serial) rather than performance.
 """
 
-from __future__ import annotations
+from __future__ import sqlite3
+import annotations
 
 import csv
 import io
@@ -1793,6 +1794,35 @@ def _converter_dtype_warning(name: str) -> str:
 # one column, then two: de-duplicating the collected warnings must not
 # collapse the distinct ones
 @pytest.mark.parametrize("names", [["col1"], ["col1", "col2"]])
+@pytest.mark.skipif(WASM, reason="WASM stays serial, so no worker raises")
+def test_parallel_converter_thread_affinity_error(tmp_path, monkeypatch):
+    # A converter may capture a thread-affine resource such as a SQLite
+    # connection created on the caller's thread (GH#68505).
+    raw = b"col1,col2\n" + b"".join(f"{i},{i * 2}\n".encode() for i in range(1000))
+    path = tmp_path / "thread_affinity.csv"
+    path.write_bytes(raw)
+
+    connection = sqlite3.connect(":memory:")
+    connection.execute("CREATE TABLE values_table (value INTEGER)")
+    connection.execute("INSERT INTO values_table VALUES (1)")
+
+    def converter(value):
+        connection.execute("SELECT value FROM values_table")
+        return int(value)
+
+    outcomes = _track_parallel(monkeypatch)
+
+    try:
+        with pytest.raises(sqlite3.ProgrammingError, match="created in a thread") as exc_info:
+            _read_forced_parallel(path, monkeypatch, converters={"col1": converter})
+
+        assert outcomes == ["raised"]
+        assert "thread-affinity error" in str(exc_info.value.__notes__[0])
+        assert "mode.max_threads=1" in exc_info.value.__notes__[0]
+    finally:
+        connection.close()
+
+
 @pytest.mark.skipif(WASM, reason="WASM stays serial, so no chunk repeats the warning")
 def test_parallel_converter_dtype_warns_once(tmp_path, monkeypatch, names):
     # The converter+dtype ParserWarning was raised once per chunk, from a pool
