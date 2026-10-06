@@ -1822,6 +1822,7 @@ def test_parallel_converter_thread_affinity_error(tmp_path, monkeypatch):
     finally:
         connection.close()
 
+
 @pytest.mark.skipif(WASM, reason="WASM stays serial, so no chunk repeats the warning")
 def test_parallel_converter_dtype_warns_once(tmp_path, monkeypatch, names):
     # The converter+dtype ParserWarning was raised once per chunk, from a pool
