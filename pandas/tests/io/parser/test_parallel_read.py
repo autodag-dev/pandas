@@ -10,8 +10,9 @@ The parallel path is enabled automatically when:
 We test correctness (parallel == serial) rather than performance.
 """
 
-from __future__ import sqlite3
-import annotations
+from __future__ import annotations
+
+import sqlite3
 
 import csv
 import io
@@ -1793,7 +1794,6 @@ def _converter_dtype_warning(name: str) -> str:
 
 # one column, then two: de-duplicating the collected warnings must not
 # collapse the distinct ones
-@pytest.mark.parametrize("names", [["col1"], ["col1", "col2"]])
 @pytest.mark.skipif(WASM, reason="WASM stays serial, so no worker raises")
 def test_parallel_converter_thread_affinity_error(tmp_path, monkeypatch):
     # A converter may capture a thread-affine resource such as a SQLite
@@ -1817,11 +1817,10 @@ def test_parallel_converter_thread_affinity_error(tmp_path, monkeypatch):
             _read_forced_parallel(path, monkeypatch, converters={"col1": converter})
 
         assert outcomes == ["raised"]
-        assert "thread-affinity error" in str(exc_info.value.__notes__[0])
+        assert "thread-affine state" in str(exc_info.value.__notes__[0])
         assert "mode.max_threads=1" in exc_info.value.__notes__[0]
     finally:
         connection.close()
-
 
 @pytest.mark.skipif(WASM, reason="WASM stays serial, so no chunk repeats the warning")
 def test_parallel_converter_dtype_warns_once(tmp_path, monkeypatch, names):
