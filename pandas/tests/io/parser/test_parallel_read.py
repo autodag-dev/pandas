@@ -1813,7 +1813,9 @@ def test_parallel_converter_thread_affinity_error(tmp_path, monkeypatch):
         with pytest.raises(
             sqlite3.ProgrammingError, match="created in a thread"
         ) as exc_info:
-            _read_forced_parallel(\n                path, monkeypatch, converters={"col1": converter}\n            )
+            _read_forced_parallel(
+                path, monkeypatch, converters={"col1": converter}
+            )
 
         assert "thread-affine state" in str(exc_info.value.__notes__[0])
         assert "mode.max_threads=1" in exc_info.value.__notes__[0]
