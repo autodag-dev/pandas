@@ -18,6 +18,7 @@ import itertools
 import mmap
 import os
 import re
+import sqlite3
 from typing import TYPE_CHECKING
 import warnings
 
@@ -1792,6 +1793,36 @@ def _converter_dtype_warning(name: str) -> str:
 
 # one column, then two: de-duplicating the collected warnings must not
 # collapse the distinct ones
+@pytest.mark.skipif(WASM, reason="WASM stays serial, so no worker raises")
+def test_parallel_converter_thread_affinity_error(tmp_path, monkeypatch):
+    # A converter may capture a thread-affine resource such as a SQLite
+    # connection created on the caller's thread (GH#68505).
+    raw = b"col1,col2\n" + b"".join(f"{i},{i * 2}\n".encode() for i in range(1000))
+    path = tmp_path / "thread_affinity.csv"
+    path.write_bytes(raw)
+
+    connection = sqlite3.connect(":memory:")
+    connection.execute("CREATE TABLE values_table (value INTEGER)")
+    connection.execute("INSERT INTO values_table VALUES (1)")
+
+    def converter(value):
+        connection.execute("SELECT value FROM values_table")
+        return int(value)
+
+    try:
+        with pytest.raises(
+            sqlite3.ProgrammingError, match="created in a thread"
+        ) as exc_info:
+            _read_forced_parallel(
+                path, monkeypatch, converters={"col1": converter}
+            )
+
+        assert "thread-affine state" in str(exc_info.value.__notes__[0])
+        assert "mode.max_threads=1" in exc_info.value.__notes__[0]
+    finally:
+        connection.close()
+
+
 @pytest.mark.parametrize("names", [["col1"], ["col1", "col2"]])
 @pytest.mark.skipif(WASM, reason="WASM stays serial, so no chunk repeats the warning")
 def test_parallel_converter_dtype_warns_once(tmp_path, monkeypatch, names):

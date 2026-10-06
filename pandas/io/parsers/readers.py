@@ -1148,7 +1148,16 @@ def _read_csv_chunks(
             ThreadPoolExecutor(max_workers=n_workers) as pool,
         ):
             for fut in [pool.submit(_worker) for _ in range(n_workers)]:
-                fut.result()
+                try:
+                    fut.result()
+                except Exception as err:
+                    if kwds.get("converters"):
+                        err.add_note(
+                            "A converter raised an exception while running in a "
+                            "parallel parser worker. If the converter uses "
+                            "thread-affine state, use mode.max_threads=1."
+                        )
+                    raise
 
             # A column of only NA tokens and ints too large for int64 converts
             # to no numeric dtype, and is then emitted with its NA tokens left
