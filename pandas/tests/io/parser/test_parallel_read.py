@@ -19,8 +19,8 @@ import mmap
 import os
 import re
 import sqlite3
-from typing import TYPE_CHECKING
 import warnings
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
