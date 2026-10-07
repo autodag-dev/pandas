@@ -830,12 +830,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
          '2013-01-03 00:00:00-05:00']
         Length: 3, dtype: datetime64[us, US/Eastern]
 
-        .. deprecated:: 3.0.0
+        .. deprecated:: 3.1.0
             For :class:`DatetimeTZDtype`, :class:`PeriodDtype`, and
             :class:`IntervalDtype` dtypes, the behavior of ``.values`` returning
             a lossy or object-dtype result is deprecated. In a future version,
             ``.values`` will return the underlying ExtensionArray. Use
-            :meth:`Series.to_numpy` or :attr:`Series.array` instead.
+            :meth:`Series.to_numpy` or :attr:`Series.array` instead; for
+            timezone-aware data, ``Series.dt.tz_convert(None).to_numpy()``
+            returns the UTC values.
         """
         if isinstance(self.dtype, (PeriodDtype, IntervalDtype)):
             warnings.warn(
@@ -1993,7 +1995,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
         The resulting DataFrame contains a single column. The name of the
         column can be set using the ``name`` parameter; otherwise it
-        defaults to the Series' name.
+        defaults to the Series' name, or 0 if the Series is unnamed.
 
         Parameters
         ----------
@@ -2364,7 +2366,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         Return number of non-NA/null observations in the Series.
 
         This method counts the number of elements that are not missing
-        (i.e., not NaN or None) in the Series.
+        in the Series.
 
         Returns
         -------
@@ -3211,14 +3213,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         percentiles. By default the lower percentile is ``25`` and the
         upper is ``75``; the ``50`` percentile is the same as the median.
 
-        For object dtypes (e.g. strings), the result's index includes
+        For object and string dtypes, the result's index includes
         ``count``, ``unique``, ``top``, and ``freq``. The ``top`` is the
         most common value and ``freq`` is its count. If multiple values
         tie for the highest count, ``top`` is chosen arbitrarily from
         among them.
 
-        For datetime dtypes, the result also includes ``mean`` and the
-        requested percentiles, computed on the underlying timestamps.
+        For datetime dtypes, the result's index includes ``count``, ``mean``,
+        ``min``, the requested percentiles, and ``max``.
 
         Examples
         --------
@@ -3236,7 +3238,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         max      3.0
         dtype: float64
 
-        An object Series.
+        A string Series.
 
         >>> s = pd.Series(["a", "a", "b", "c"])
         >>> s.describe()
@@ -3608,8 +3610,9 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         """
         Compare to another Series and show the differences.
 
-        This method aligns two Series and highlights only the values that
-        differ between them. Equal values are shown as NaN by default.
+        This method aligns two Series and returns only the positions where the
+        values differ. With ``keep_shape=True``, equal positions are kept and
+        shown as NaN unless ``keep_equal=True``.
 
         Parameters
         ----------
@@ -4088,9 +4091,8 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
         kind : {'quicksort', 'mergesort', 'heapsort', 'stable'}, default 'quicksort'
             Choice of sorting algorithm. See also :func:`numpy.sort` for more
-            information. The sort order is deterministic for a given input.
-            `mergesort` and `stable` are the only stable algorithms, which preserve
-            the relative order of equal keys.
+            information. 'mergesort' and 'stable' are the only stable algorithms,
+            which preserve the relative order of equal keys.
         na_position : {'first' or 'last'}, default 'last'
             Argument 'first' puts NaNs at the beginning, 'last' puts NaNs at
             the end.
@@ -4346,10 +4348,9 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
         kind : {'quicksort', 'mergesort', 'heapsort', 'stable'}, default 'quicksort'
             Choice of sorting algorithm. See also :func:`numpy.sort` for more
-            information. The sort order is deterministic for a given input.
-            'mergesort' and 'stable' are the only stable algorithms, which preserve
-            the relative order of equal keys. This option is ignored when sorting on a
-            MultiIndex or when a `level` is specified.
+            information. 'mergesort' and 'stable' are the only stable algorithms,
+            which preserve the relative order of equal keys. This option is ignored
+            when sorting on a MultiIndex or when a `level` is specified.
         na_position : {'first', 'last'}, default 'last'
             If 'first' puts NaNs at the beginning, 'last' puts NaNs at the end.
             Not implemented for MultiIndex.
@@ -4522,8 +4523,8 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         """
         Return the largest `n` elements.
 
-        This method is optimized for performance compared to sorting the
-        entire Series when only a few of the top values are needed.
+        Faster than ``.sort_values(ascending=False).head(n)`` for small `n`
+        relative to the size of the ``Series`` object.
 
         Parameters
         ----------
@@ -4550,11 +4551,6 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         Series.nsmallest: Get the `n` smallest elements.
         Series.sort_values: Sort Series by values.
         Series.head: Return the first `n` rows.
-
-        Notes
-        -----
-        Faster than ``.sort_values(ascending=False).head(n)`` for small `n`
-        relative to the size of the ``Series`` object.
 
         Examples
         --------
@@ -4632,8 +4628,8 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         """
         Return the smallest `n` elements.
 
-        This method is optimized for performance compared to sorting the
-        entire Series when only a few of the bottom values are needed.
+        Faster than ``.sort_values().head(n)`` for small `n` relative to
+        the size of the ``Series`` object.
 
         Parameters
         ----------
@@ -4660,11 +4656,6 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         Series.nlargest: Get the `n` largest elements.
         Series.sort_values: Sort Series by values.
         Series.head: Return the first `n` rows.
-
-        Notes
-        -----
-        Faster than ``.sort_values().head(n)`` for small `n` relative to
-        the size of the ``Series`` object.
 
         Examples
         --------
@@ -6854,6 +6845,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         See Also
         --------
         DataFrame.isna : Detect missing values.
+        Series.isnull : Alias of isna.
         DataFrame.isnull : Alias of isna.
         Series.notna : Boolean inverse of isna.
         DataFrame.notna : Boolean inverse of isna.
@@ -6950,6 +6942,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         DataFrame.isna : Detect missing values.
         Series.isnull : Alias of isna.
         DataFrame.isnull : Alias of isna.
+        Series.notnull : Alias of notna.
         DataFrame.notna : Boolean inverse of isna.
         DataFrame.notnull : Alias of notna.
         Series.dropna : Omit axes labels with missing values.
@@ -7688,8 +7681,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def le(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Less than or equal to of series and other, \
-        element-wise (binary operator `le`).
+        Return Less than or equal to of series and other, element-wise (binary operator `le`).
 
         Equivalent to ``series <= other``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -7725,7 +7717,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
         Examples
         --------
-        >>> a = pd.Series([1, 1, 1, np.nan, 1], index=['a', 'b', 'c', 'd', 'e'])
+        >>> a = pd.Series([1, 1, 1, np.nan, 1], index=["a", "b", "c", "d", "e"])
         >>> a
         a    1.0
         b    1.0
@@ -7733,7 +7725,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    NaN
         e    1.0
         dtype: float64
-        >>> b = pd.Series([0, 1, 2, np.nan, 1], index=['a', 'b', 'c', 'd', 'f'])
+        >>> b = pd.Series([0, 1, 2, np.nan, 1], index=["a", "b", "c", "d", "f"])
         >>> b
         a    0.0
         b    1.0
@@ -7749,7 +7741,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         e    False
         f     True
         dtype: bool
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, operator.le, level=level, fill_value=fill_value, axis=axis
         )
@@ -7823,8 +7815,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def ge(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Greater than or equal to of series and other, \
-        element-wise (binary operator `ge`).
+        Return Greater than or equal to of series and other, element-wise (binary operator `ge`).
 
         Equivalent to ``series >= other``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -7885,7 +7876,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         e     True
         f    False
         dtype: bool
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, operator.ge, level=level, fill_value=fill_value, axis=axis
         )
@@ -8291,8 +8282,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def rmul(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Multiplication of series and other, \
-        element-wise (binary operator `rmul`).
+        Return Multiplication of series and other, element-wise (binary operator `rmul`).
 
         Equivalent to ``other * series``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8349,15 +8339,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    0.0
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, roperator.rmul, level=level, fill_value=fill_value, axis=axis
         )
 
     def truediv(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Floating division of series and other, \
-        element-wise (binary operator `truediv`).
+        Return Floating division of series and other, element-wise (binary operator `truediv`).
 
         Equivalent to ``series / other``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8412,7 +8401,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    0.0
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, operator.truediv, level=level, fill_value=fill_value, axis=axis
         )
@@ -8422,8 +8411,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def rtruediv(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Floating division of series and other, \
-        element-wise (binary operator `rtruediv`).
+        Return Floating division of series and other, element-wise (binary operator `rtruediv`).
 
         Equivalent to ``other / series``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8480,7 +8468,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    inf
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, roperator.rtruediv, level=level, fill_value=fill_value, axis=axis
         )
@@ -8489,8 +8477,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def floordiv(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Integer division of series and other, \
-        element-wise (binary operator `floordiv`).
+        Return Integer division of series and other, element-wise (binary operator `floordiv`).
 
         Equivalent to ``series // other``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8547,15 +8534,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    0.0
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, operator.floordiv, level=level, fill_value=fill_value, axis=axis
         )
 
     def rfloordiv(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Integer division of series and other, \
-        element-wise (binary operator `rfloordiv`).
+        Return Integer division of series and other, element-wise (binary operator `rfloordiv`).
 
         Equivalent to ``other // series``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8612,7 +8598,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    inf
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, roperator.rfloordiv, level=level, fill_value=fill_value, axis=axis
         )
@@ -8681,8 +8667,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def rmod(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Modulo of series and other, \
-        element-wise (binary operator `rmod`).
+        Return Modulo of series and other, element-wise (binary operator `rmod`).
 
         Equivalent to ``other % series``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8746,8 +8731,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
 
     def pow(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Exponential power of series and other, \
-        element-wise (binary operator `pow`).
+        Return Exponential power of series and other, element-wise (binary operator `pow`).
 
         Equivalent to ``series ** other``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8804,15 +8788,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    0.0
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, operator.pow, level=level, fill_value=fill_value, axis=axis
         )
 
     def rpow(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Exponential power of series and other, \
-        element-wise (binary operator `rpow`).
+        Return Exponential power of series and other, element-wise (binary operator `rpow`).
 
         Equivalent to ``other ** series``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8869,15 +8852,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         d    1.0
         e    NaN
         dtype: float64
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, roperator.rpow, level=level, fill_value=fill_value, axis=axis
         )
 
     def divmod(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Integer division and modulo of series and other, \
-        element-wise (binary operator `divmod`).
+        Return Integer division and modulo of series and other, element-wise (binary operator `divmod`).
 
         Equivalent to ``divmod(series, other)``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -8940,15 +8922,14 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
          d    0.0
          e    NaN
          dtype: float64)
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, divmod, level=level, fill_value=fill_value, axis=axis
         )
 
     def rdivmod(self, other, level=None, fill_value=None, axis: Axis = 0) -> Series:
         """
-        Return Integer division and modulo of series and other, \
-        element-wise (binary operator `rdivmod`).
+        Return Integer division and modulo of series and other, element-wise (binary operator `rdivmod`).
 
         Equivalent to ``other divmod series``, but with support to substitute a
         fill_value for missing data in either one of the inputs.
@@ -9011,7 +8992,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
          d    NaN
          e    NaN
          dtype: float64)
-        """
+        """  # noqa: E501
         return self._flex_method(
             other, roperator.rdivmod, level=level, fill_value=fill_value, axis=axis
         )
@@ -9099,9 +9080,10 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         skipna : bool, default True
             Exclude NA/null values. If the entire row/column is NA and skipna is
             True, then the result will be False, as for an empty row/column.
-            If skipna is False, NA values are treated as True for NumPy-backed
-            dtypes (since they are not equal to zero). For nullable dtypes such
-            as ``boolean``, NA values propagate following
+            If skipna is False, ``NaN`` (and ``NaT`` in timedelta data) is treated
+            as True, ``None`` in object dtype is treated as False and
+            ``pd.NA`` in object dtype raises. For nullable dtypes such as
+            ``boolean``, NA values propagate following
             :ref:`Kleene logic <boolean.kleene>`.
         **kwargs : any, default None
             Additional keywords have no effect but might be accepted for
@@ -9232,9 +9214,10 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         skipna : bool, default True
             Exclude NA/null values. If the entire row/column is NA and skipna is
             True, then the result will be True, as for an empty row/column.
-            If skipna is False, NA values are treated as True for NumPy-backed
-            dtypes (since they are not equal to zero). For nullable dtypes such
-            as ``boolean``, NA values propagate following
+            If skipna is False, ``NaN`` (and ``NaT`` in timedelta data) is treated
+            as True, ``None`` in object dtype is treated as False and
+            ``pd.NA`` in object dtype raises. For nullable dtypes such as
+            ``boolean``, NA values propagate following
             :ref:`Kleene logic <boolean.kleene>`.
         **kwargs : any, default None
             Additional keywords have no effect but might be accepted for
@@ -9470,14 +9453,6 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
             Axis for the function to be applied on.
             For `Series` this parameter is unused and defaults to 0.
 
-            .. warning::
-
-                The behavior of DataFrame.sum with ``axis=None`` is deprecated,
-                in a future version this will reduce over both axes and return a scalar
-                To retain the old behavior, pass axis=0 (or do not pass axis).
-
-            .. versionadded:: 2.0.0
-
         skipna : bool, default True
             Exclude NA/null values when computing the result.
         numeric_only : bool, default False
@@ -9572,13 +9547,6 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         axis : {index (0)}
             Axis for the function to be applied on.
             For `Series` this parameter is unused and defaults to 0.
-
-            .. warning::
-                The behavior of DataFrame.prod with ``axis=None`` is deprecated,
-                in a future version this will reduce over both axes and return a scalar
-                To retain the old behavior, pass axis=0 (or do not pass axis).
-
-            .. versionadded:: 2.0.0
         skipna : bool, default True
             Exclude NA/null values when computing the result.
         numeric_only : bool, default False
@@ -9649,8 +9617,8 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         """
         Return the mean of the values over the requested axis.
 
-        This method computes the arithmetic mean of the Series values,
-        optionally skipping missing values.
+        Missing values are skipped by default; the result is NA if all
+        values are missing.
 
         Parameters
         ----------
@@ -9709,8 +9677,8 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         """
         Return the median of the values over the requested axis.
 
-        This method computes the median (middle value) of the Series values,
-        optionally skipping missing values.
+        Missing values are skipped by default; the result is NA if all
+        values are missing.
 
         Parameters
         ----------
@@ -9861,12 +9829,6 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         axis : {index (0)}
             For `Series` this parameter is unused and defaults to 0.
 
-            .. warning::
-
-                The behavior of DataFrame.var with ``axis=None`` is deprecated,
-                in a future version this will reduce over both axes and return a scalar
-                To retain the old behavior, pass axis=0 (or do not pass axis).
-
         skipna : bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
@@ -9984,7 +9946,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         >>> s.std()
         1.0
 
-        Alternatively, ``ddof=0`` can be set to normalize by $N$ instead of $N-1$:
+        Alternatively, ``ddof=0`` can be set to normalize by N instead of N-1:
 
         >>> s.std(ddof=0)
         0.816496580927726
@@ -10120,7 +10082,7 @@ class Series(base.IndexOpsMixin, NDFrame):  # type: ignore[misc]
         axis : {0 or 'index'}, default 0
             This parameter is unused and defaults to 0.
         skipna : bool, default True
-            If the entire series is NA, the result will be NA.
+            Exclude NA/null values. If the entire series is NA, the result will be NA.
         *args, **kwargs
             Additional keywords have no effect but might be accepted for
             compatibility with NumPy. See :ref:`gotchas.numpy_kwargs` for more.
