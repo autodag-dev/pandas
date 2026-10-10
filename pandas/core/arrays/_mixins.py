@@ -443,7 +443,7 @@ class NDArrayBackedExtensionArray(NDArrayBacked, ExtensionArray):
 
     def fillna(self, value, limit: int | None = None, copy: bool = True) -> Self:
         """
-        Fill NA/NaN values using the specified method.
+        Fill NA/NaN values with the specified value.
 
         Parameters
         ----------
@@ -452,13 +452,22 @@ class NDArrayBackedExtensionArray(NDArrayBacked, ExtensionArray):
             Alternatively, an array-like 'value' can be given. It's expected
             that the array-like have the same length as 'self'.
         limit : int, default None
-            The maximum number of entries along the entire axis where NaNs will be
-            filled.
+            The maximum number of entries where NA values will be filled.
+        copy : bool, default True
+            Whether to make a copy of the data before filling. If False, then
+            the original should be modified and no new memory should be allocated.
 
         Returns
         -------
         ExtensionArray
             With NA/NaN filled.
+
+        See Also
+        --------
+        api.extensions.ExtensionArray.dropna : Return ExtensionArray without
+            NA values.
+        api.extensions.ExtensionArray.isna : A 1-D array indicating if
+            each value is missing.
         """
         mask = self.isna()
         if limit is not None and limit < len(self):

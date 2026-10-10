@@ -387,7 +387,8 @@ class IndexingMixin:
           e.g. ``[True, False, True]``.
         - An alignable boolean Series. The index of the key will be aligned before
           masking.
-        - An alignable Index. The Index of the returned selection will be the input.
+        - An alignable Index. The selection follows the order of the input, and
+          the returned Index keeps the name of the original index.
         - A ``callable`` function with one argument (the calling Series or
           DataFrame) and that returns valid output for indexing (one of the above)
 
@@ -1391,7 +1392,8 @@ class _LocIndexer(_LocationIndexer):
       e.g. ``[True, False, True]``.
     - An alignable boolean Series. The index of the key will be aligned before
       masking.
-    - An alignable Index. The Index of the returned selection will be the input.
+    - An alignable Index. The selection follows the order of the input, and
+      the returned Index keeps the name of the original index.
     - A ``callable`` function with one argument (the calling Series or
       DataFrame) and that returns valid output for indexing (one of the above)
 
