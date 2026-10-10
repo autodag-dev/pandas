@@ -2111,6 +2111,7 @@ class BaseMaskedArray(OpsMixin, ExtensionArray):
         limit_direction,
         limit_area,
         copy: bool,
+        limit_behavior: Literal["fill", "skip"] = "fill",
         **kwargs,
     ) -> FloatingArray:
         """
@@ -2142,6 +2143,7 @@ class BaseMaskedArray(OpsMixin, ExtensionArray):
             limit_direction=limit_direction,
             limit_area=limit_area,
             mask=mask,
+            limit_behavior=limit_behavior,
             **kwargs,
         )
         if not copy:
