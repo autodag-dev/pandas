@@ -18,7 +18,10 @@ from typing import (
 from pandas._libs import lib
 from pandas.util._decorators import set_module
 
-from pandas.io.common import stringify_path
+from pandas.io.common import (
+    is_traversable,
+    stringify_path,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Hashable
@@ -170,10 +173,13 @@ def read_sas(
             "If this is a buffer object rather "
             "than a string name, you must specify a format string"
         )
-        filepath_or_buffer = stringify_path(filepath_or_buffer)
-        if not isinstance(filepath_or_buffer, str):
+        path = stringify_path(filepath_or_buffer)
+        if is_traversable(path):
+            fname = path.name.lower()
+        elif isinstance(path, str):
+            fname = path.lower()
+        else:
             raise ValueError(buffer_error_msg)
-        fname = filepath_or_buffer.lower()
         if ".xpt" in fname:
             format = "xport"
         elif ".sas7bdat" in fname:
