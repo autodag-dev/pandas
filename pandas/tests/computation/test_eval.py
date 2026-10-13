@@ -1988,6 +1988,42 @@ def test_eval_no_support_column_name(request, engine, parser, column):
     tm.assert_frame_equal(result, expected)
 
 
+@pytest.mark.parametrize("column", ["Timestamp", "datetime", "list", "tuple", "inf"])
+def test_query_column_shadows_caller_variable(engine, parser, column):
+    # GH#35595 a caller variable of the same name, e.g. from `import datetime`,
+    #  must not hide the column
+    df = pd.DataFrame({column: [1, 7, 3]})
+    result = df.query(
+        f"{column} > 2", local_dict={column: np}, engine=engine, parser=parser
+    )
+    tm.assert_frame_equal(result, df.iloc[[1, 2]])
+
+    if parser == "pandas":
+        # the "@" prefix still reaches the caller variable
+        result = df.query(
+            f"{column} > @{column}",
+            local_dict={column: 2},
+            engine=engine,
+            parser=parser,
+        )
+        tm.assert_frame_equal(result, df.iloc[[1, 2]])
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "a > Timestamp('2020-01-01')",
+        "a > datetime(2020, 1, 1)",
+        "a > datetime.strptime('2020-01-01', '%Y-%m-%d')",
+    ],
+)
+def test_query_default_global_call(engine, parser, expr):
+    # GH#50442
+    df = pd.DataFrame({"a": pd.date_range("2020-01-01", periods=3)})
+    result = df.query(expr, engine=engine, parser=parser)
+    tm.assert_frame_equal(result, df.iloc[1:])
+
+
 @pytest.mark.parametrize("column", ["inf", "Inf"])
 def test_query_column_shadows_inf(engine, parser, column):
     # GH#47859
