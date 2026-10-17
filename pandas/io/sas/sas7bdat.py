@@ -1007,6 +1007,21 @@ class SAS7BDATReader(SASReader):
         None,  # Data
     ]
 
+    # Same order as const.SASIndex. Plain functions, not bound methods: those
+    # would make the reader a reference cycle, so its file would stay open until
+    # a cyclic collection rather than when the reader is dropped.
+    _subheader_processors = [
+        _process_rowsize_subheader,
+        _process_columnsize_subheader,
+        _process_subheader_counts,
+        _process_columntext_subheader,
+        _process_columnname_subheader,
+        _process_columnattributes_subheader,
+        _process_format_subheader,
+        _process_columnlist_subheader,
+        None,  # Data
+    ]
+
     def read(self, nrows: int | None = None) -> DataFrame:
         if (nrows is None) and (self.chunksize is not None):
             nrows = self.chunksize
