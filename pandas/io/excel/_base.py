@@ -53,6 +53,7 @@ from pandas.core.frame import DataFrame
 from pandas.io.common import (
     IOHandles,
     get_handle,
+    is_traversable,
     stringify_path,
     validate_header_arg,
 )
@@ -1235,6 +1236,8 @@ class ExcelWriter(Generic[_WorkbookT]):
             if engine is None or (isinstance(engine, str) and engine == "auto"):
                 if isinstance(path, str):
                     ext = os.path.splitext(path)[-1][1:]
+                elif is_traversable(path):
+                    ext = os.path.splitext(path.name)[-1][1:]
                 else:
                     ext = "xlsx"
 
@@ -1325,6 +1328,8 @@ class ExcelWriter(Generic[_WorkbookT]):
         if isinstance(path, str):
             ext = os.path.splitext(path)[-1]
             self.check_extension(ext)
+        elif is_traversable(path):
+            self.check_extension(os.path.splitext(path.name)[-1])
 
         # use mode to open the file
         if "b" not in mode:
