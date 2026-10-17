@@ -2479,3 +2479,30 @@ def test_row_blocked_conversion_late_dtype_miss(tmp_path, monkeypatch, threads):
         result = pd.read_csv(path)
     expected = pd.read_csv(path, engine="python")
     tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.skipif(WASM, reason="WASM stays serial")
+@pytest.mark.parametrize(
+    "dtype, bad, msg",
+    [
+        ("int64", "oops", "Unable to convert column b to type int64: invalid value "),
+        ("float64", "oops", "Unable to convert column b to type float64: invalid "),
+        ("int64", "2.5", "cannot safely convert passed user dtype of int64 for "),
+    ],
+)
+def test_parallel_conversion_error_position_in_file(
+    tmp_path, monkeypatch, dtype, bad, msg
+):
+    # GH#53966 a failing chunk sends the read back to serial, so the position
+    # counts from the file's first data row, not the chunk's
+    rows = [f"{i},{i}" for i in range(4000)]
+    rows[3500] = f"3500,{bad}"
+    path = tmp_path / "bad.csv"
+    path.write_text("a,b\n" + "\n".join(rows) + "\n", encoding="utf-8")
+    monkeypatch.setattr(_readers, "_PARALLEL_MIN_CHUNK_ROWS", 1)
+    seen = _spy_on_chunk_offsets(monkeypatch)
+
+    with pytest.raises(ValueError, match=f"{msg}.* at position 3500$"):
+        _read_forced_parallel(path, monkeypatch, dtype={"b": dtype})
+    # row 3500 is not in the first chunk, so a chunk-relative position differs
+    assert seen and seen[0][1] < path.read_bytes().index(b"3500,")

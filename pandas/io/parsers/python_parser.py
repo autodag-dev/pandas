@@ -17,6 +17,10 @@ import warnings
 import numpy as np
 
 from pandas._libs import lib
+from pandas._libs.parsers import (
+    conversion_error,
+    unsafe_cast_error,
+)
 from pandas.errors import (
     EmptyDataError,
     ParserError,
@@ -38,6 +42,7 @@ from pandas.core.dtypes.dtypes import (
     CategoricalDtype,
     ExtensionDtype,
 )
+from pandas.core.dtypes.missing import isna
 
 from pandas.core import algorithms
 from pandas.core.arrays import (
@@ -107,6 +112,8 @@ class PythonParser(ParserBase):
         self.buf_pos: list[int] = []
         self.pos = 0
         self.line_pos = 0
+        # data rows converted by earlier reads, to locate conversion errors
+        self._row_offset = 0
         self._first_row_len = 0
         self._header_row_len = 0
 
@@ -325,7 +332,11 @@ class PythonParser(ParserBase):
         alldata = self._rows_to_cols(content)
         data, columns = self._exclude_implicit_index(alldata)
 
-        conv_data = self._convert_data(data)
+        try:
+            conv_data = self._convert_data(data)
+        finally:
+            # also on failure: reading a caller's buffer can continue past it
+            self._row_offset += len(alldata[0]) if alldata else 0
         conv_data = self._do_date_conversions(columns, conv_data)
 
         index, result_columns = self._make_index(alldata, columns, indexnamerow)
@@ -473,7 +484,11 @@ class PythonParser(ParserBase):
                 if cast_type and (cvals.dtype != cast_type or is_ea):
                     if not is_ea and na_count > 0:
                         if is_bool_dtype(cast_type):
-                            raise ValueError(f"Bool column has NA values in column {c}")
+                            position = self._row_offset + isna(cvals).argmax()
+                            raise ValueError(
+                                f"Bool column has NA values in column {c} at "
+                                f"position {position}"
+                            )
                     cvals = self._cast_types(cvals, cast_type, c)
 
             result[c] = cvals
@@ -547,13 +562,18 @@ class PythonParser(ParserBase):
                     f"Extension Array: {array_type} must implement "
                     "_from_sequence_of_strings in order to be used in parser methods"
                 ) from err
+            except (ValueError, TypeError, OverflowError) as err:
+                raise conversion_error(err, cast_type, column) from err
 
         elif isinstance(values, ExtensionArray):
-            casted: ArrayLike = values.astype(cast_type, copy=False)
             # with dtype_backend="pyarrow", _infer_types has already boxed the
             #  column, so an explicit numpy integer dtype reaches this branch,
             #  not the one below
-            _validate_integer_cast(values, casted, cast_type, column)
+            try:
+                casted: ArrayLike = values.astype(cast_type, copy=False)
+            except (ValueError, OverflowError) as err:
+                raise conversion_error(err, cast_type, column) from err
+            _validate_integer_cast(values, casted, cast_type, column, self._row_offset)
             values = casted
         elif issubclass(cast_type.type, str):
             # TODO: why skipna=True here and False above? some tests depend
@@ -565,11 +585,9 @@ class PythonParser(ParserBase):
         else:
             try:
                 casted = astype_array(values, cast_type, copy=True)
-            except ValueError as err:
-                raise ValueError(
-                    f"Unable to convert column {column} to type {cast_type}"
-                ) from err
-            _validate_integer_cast(values, casted, cast_type, column)
+            except (ValueError, OverflowError) as err:
+                raise conversion_error(err, cast_type, column) from err
+            _validate_integer_cast(values, casted, cast_type, column, self._row_offset)
             values = casted
         return values
 
@@ -1598,7 +1616,7 @@ def _validate_skipfooter_arg(skipfooter: int) -> int:
 
 
 def _validate_integer_cast(
-    original: ArrayLike, casted: ArrayLike, cast_type: np.dtype, column
+    original: ArrayLike, casted: ArrayLike, cast_type: np.dtype, column, offset: int
 ) -> None:
     """
     Raise if casting to an integer dtype wrapped around (GH#55232).
@@ -1612,9 +1630,8 @@ def _validate_integer_cast(
         # discarding a float's fractional part is not wraparound and stays
         #  allowed (see test_read_fwf.py::test_dtype)
         values = np.trunc(values)
-    if (np.asarray(casted) != values).any():
-        raise ValueError(
-            f"cannot safely convert passed user dtype of "
-            f"{cast_type} for {values.dtype.name} dtyped data in "
-            f"column {column}"
+    changed = np.asarray(casted) != values
+    if changed.any():
+        raise unsafe_cast_error(
+            np.asarray(original), changed, cast_type, column, offset
         )
