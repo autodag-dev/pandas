@@ -7,7 +7,6 @@ from datetime import (
     time,
     timedelta,
 )
-import re
 
 import numpy as np
 import pytest
@@ -826,14 +825,43 @@ class TestDateRanges:
         )
         tm.assert_index_equal(result, expected, check_freq=False)
 
-    @pytest.mark.parametrize("freq", ["2T", "2L", "1l", "1U", "2N", "2n"])
+    @pytest.mark.parametrize(
+        "freq", ["2T", "2L", "1l", "1U", "2N", "2n", "2H", "2CBH", "2S"]
+    )
     def test_frequency_H_T_S_L_U_N_raises(self, freq):
         msg = f"Invalid frequency: {freq}"
         with pytest.raises(ValueError, match=msg):
             pd.date_range("1/1/2000", periods=2, freq=freq)
 
     @pytest.mark.parametrize(
-        "freq_depr", ["m", "bm", "CBM", "SM", "BQ", "q-feb", "y-may", "Y-MAY"]
+        "freq_depr",
+        [
+            "m",
+            "bm",
+            "CBM",
+            "SM",
+            "BQ",
+            "q-feb",
+            "y-may",
+            "Y-MAY",
+            "2m",
+            "2sm",
+            "2Q",
+            "2Q-SEP",
+            "2q-sep",
+            "1Y",
+            "2Y-MAR",
+            "2y",
+            "2ye-mar",
+            "2ys",
+            "2qe",
+            "2qs-feb",
+            "2bqs",
+            "2sms",
+            "2bms",
+            "2cbme",
+            "2me",
+        ],
     )
     def test_frequency_raises(self, freq_depr):
         msg = f"Invalid frequency: {freq_depr}"
@@ -848,13 +876,25 @@ class TestDateRanges:
         assert idx[0] == sdate + 0 * pd.offsets.BDay()
         assert idx.freq == "B"
 
-    @pytest.mark.parametrize("freq", ["200A", "2A-MAY"])
+    @pytest.mark.parametrize("freq", ["200A", "2A-MAY", "1A", "2A-MAR", "2a-mar"])
     def test_frequency_A_raises(self, freq):
-        freq_msg = re.split("[0-9]*", freq, maxsplit=1)[1]
-        msg = f"Invalid frequency: {freq_msg}"
+        msg = f"Invalid frequency: {freq}"
 
         with pytest.raises(ValueError, match=msg):
             pd.date_range("1/1/2000", periods=2, freq=freq)
+
+    @pytest.mark.parametrize("freq_depr", ["2MIN", "2nS", "2Us"])
+    def test_date_range_uppercase_frequency_deprecated(self, freq_depr):
+        # GH#9586, GH#54939
+        depr_msg = (
+            f"'{freq_depr[1:]}' is deprecated and will be removed in a "
+            f"future version, please use '{freq_depr.lower()[1:]}' instead."
+        )
+
+        expected = pd.date_range("1/1/2000", periods=4, freq=freq_depr.lower())
+        with tm.assert_produces_warning(Pandas4Warning, match=depr_msg):
+            result = pd.date_range("1/1/2000", periods=4, freq=freq_depr)
+        tm.assert_index_equal(result, expected)
 
     @pytest.mark.parametrize(
         "freq,freq_depr",
