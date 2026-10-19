@@ -71,6 +71,7 @@ objects.
       api.extensions.ExtensionArray.searchsorted
       api.extensions.ExtensionArray.shift
       api.extensions.ExtensionArray.sort
+      api.extensions.ExtensionArray.squeeze
       api.extensions.ExtensionArray.take
       api.extensions.ExtensionArray.to_numpy
       api.extensions.ExtensionArray.transpose
