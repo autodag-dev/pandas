@@ -219,8 +219,7 @@ class Expanding(RollingAndExpandingMixin):
         Calculate the expanding count of non NaN observations.
 
         At each point in time, returns the number of non-NaN values seen
-        so far. This is useful for tracking data availability across an
-        expanding window.
+        so far, subject to ``min_periods``.
 
         Parameters
         ----------
@@ -275,10 +274,10 @@ class Expanding(RollingAndExpandingMixin):
         raw : bool, default False
             * ``False`` : passes each row or column as a Series to the
               function.
-            * ``True`` : the passed function will receive ndarray objects instead.
-              Pandas-only attributes such as ``.iloc`` or ``.index`` are not
-              available on ndarrays and will raise ``AttributeError`` if used
-              inside ``func``.
+            * ``True`` : the passed function will receive ndarray objects instead,
+              so pandas-only attributes such as ``.iloc`` or ``.index`` are not
+              available inside ``func`` (with the default ``'cython'`` engine they
+              raise ``AttributeError``).
 
             If you are just applying a NumPy reduction function this will
             achieve much better performance.
@@ -762,9 +761,8 @@ class Expanding(RollingAndExpandingMixin):
         """
         Calculate the expanding standard deviation.
 
-        At each point in time, returns the sample standard deviation of all
-        values observed up to that point, using ``ddof`` degrees of freedom
-        correction.
+        At each point in time, returns the standard deviation of all values
+        observed up to that point.
 
         Parameters
         ----------
@@ -806,7 +804,8 @@ class Expanding(RollingAndExpandingMixin):
         The default ``ddof`` of 1 used in :meth:`Series.std` is different
         than the default ``ddof`` of 0 in :func:`numpy.std`.
 
-        A minimum of one period is required for the rolling calculation.
+        A window needs at least ``ddof + 1`` observations to give a non-NaN
+        result.
 
         Examples
         --------
@@ -839,9 +838,8 @@ class Expanding(RollingAndExpandingMixin):
         """
         Calculate the expanding variance.
 
-        At each point in time, returns the sample variance of all values
-        observed up to that point, using ``ddof`` degrees of freedom
-        correction.
+        At each point in time, returns the variance of all values observed up
+        to that point.
 
         Parameters
         ----------
@@ -883,7 +881,8 @@ class Expanding(RollingAndExpandingMixin):
         The default ``ddof`` of 1 used in :meth:`Series.var` is different
         than the default ``ddof`` of 0 in :func:`numpy.var`.
 
-        A minimum of one period is required for the rolling calculation.
+        A window needs at least ``ddof + 1`` observations to give a non-NaN
+        result.
 
         Examples
         --------
@@ -936,7 +935,8 @@ class Expanding(RollingAndExpandingMixin):
 
         Notes
         -----
-        A minimum of one period is required for the calculation.
+        A window needs at least ``ddof + 1`` observations to give a non-NaN
+        result.
 
         Examples
         --------
@@ -998,7 +998,7 @@ class Expanding(RollingAndExpandingMixin):
         Calculate the expanding Fisher's definition of kurtosis without bias.
 
         Measures the tailedness of the distribution over all data points
-        seen so far. A minimum of four periods is required.
+        seen so far.
 
         Parameters
         ----------
@@ -1048,8 +1048,8 @@ class Expanding(RollingAndExpandingMixin):
         """
         Calculate the expanding First (left-most) element of the window.
 
-        At each point in time, returns the first value in the expanding
-        window, which is the earliest observation in the data.
+        At each point in time, returns the earliest non-NaN value observed
+        so far.
 
         Parameters
         ----------
@@ -1086,8 +1086,8 @@ class Expanding(RollingAndExpandingMixin):
         """
         Calculate the expanding Last (right-most) element of the window.
 
-        At each point in time, returns the last value in the expanding
-        window, which is the most recent observation in the data.
+        At each point in time, returns the most recent non-NaN value observed
+        so far.
 
         Parameters
         ----------
@@ -1313,9 +1313,9 @@ class Expanding(RollingAndExpandingMixin):
         """
         Calculate the expanding sample covariance.
 
-        When ``other`` is provided, computes pairwise covariance between
-        ``self`` and ``other``; otherwise computes all pairwise covariances
-        of the columns.
+        By default, computes covariances between matching columns of ``self``
+        and ``other``. Without ``other``, a DataFrame gives all pairwise
+        covariances of its columns and a Series gives its variance.
 
         Parameters
         ----------
@@ -1375,7 +1375,8 @@ class Expanding(RollingAndExpandingMixin):
         """
         Calculate the expanding correlation.
 
-        Uses Pearson's correlation over all data points seen so far.
+        At each point in time, Pearson's correlation is computed over all data
+        points seen so far.
 
         Parameters
         ----------

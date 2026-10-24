@@ -1847,6 +1847,8 @@ class MultiIndex(Index):
         For a MultiIndex, this checks whether the tuples are in
         lexicographically non-decreasing order: the first level is
         compared first, ties are broken by the second level, and so on.
+        A MultiIndex with missing values in any level is never considered
+        monotonic, even if the missing values do not affect the ordering.
 
         Returns
         -------
@@ -1894,6 +1896,8 @@ class MultiIndex(Index):
         For a MultiIndex, this checks whether the tuples are in
         lexicographically non-increasing order: the first level is
         compared first, ties are broken by the second level, and so on.
+        A MultiIndex with missing values in any level is never considered
+        monotonic, even if the missing values do not affect the ordering.
 
         Returns
         -------
@@ -2005,7 +2009,7 @@ class MultiIndex(Index):
 
         Returns
         -------
-        Index
+        MultiIndex
             Returns a MultiIndex object after removing NA/NaN values.
 
         See Also
@@ -2144,8 +2148,8 @@ class MultiIndex(Index):
 
         Returns
         -------
-        MultiIndex
-            Unique values in the MultiIndex.
+        Index or MultiIndex
+            Unique values in the MultiIndex, or an Index if ``level`` is given.
 
         See Also
         --------
@@ -4753,15 +4757,12 @@ class MultiIndex(Index):
         """
         Create a MultiIndex with values cast to dtypes.
 
-        The class of a new Index is determined by dtype. When conversion is
-        impossible, a TypeError exception is raised.
+        Only conversion to ``object`` dtype is supported; other dtypes raise.
 
         Parameters
         ----------
         dtype : numpy dtype or pandas type
-            Note that any signed integer `dtype` is treated as ``'int64'``,
-            and any unsigned integer `dtype` is treated as ``'uint64'``,
-            regardless of the size.
+            Only ``object`` dtype is supported.
         copy : bool, default True
             By default, astype always returns a newly allocated object.
             If copy is set to False and internal requirements on dtype are
@@ -4953,15 +4954,6 @@ class MultiIndex(Index):
 
         Examples
         --------
-        >>> idx = pd.Index([1, 2, 3])
-        >>> idx
-        Index([1, 2, 3], dtype='int64')
-
-        Check whether each index value in a list of values.
-
-        >>> idx.isin([1, 4])
-        array([ True, False, False])
-
         >>> mi = pd.MultiIndex.from_arrays(
         ...     [[1, 2, 3], ["red", "blue", "green"]], names=["number", "color"]
         ... )

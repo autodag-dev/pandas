@@ -1590,7 +1590,8 @@ class SeriesGroupBy(GroupBy[Series]):
         Returns
         -------
         Series
-            The `n` largest values in the Series, sorted in decreasing order.
+            The `n` largest values in each group, sorted in decreasing order within
+            each group.
 
         See Also
         --------
@@ -1658,7 +1659,8 @@ class SeriesGroupBy(GroupBy[Series]):
         Returns
         -------
         Series
-            The `n` smallest values in the Series, sorted in increasing order.
+            The `n` smallest values in each group, sorted in increasing order within
+            each group.
 
         See Also
         --------
@@ -1974,8 +1976,8 @@ class SeriesGroupBy(GroupBy[Series]):
         """
         Draw histogram for each group's values using :meth:`Series.hist` API.
 
-        A separate histogram subplot is generated for each group, making it
-        easy to visually compare the distribution of values across groups.
+        Each group's values are passed to :meth:`Series.hist`. With the default
+        ``ax=None`` all groups are drawn on the same current Axes.
 
         Parameters
         ----------
@@ -2007,8 +2009,9 @@ class SeriesGroupBy(GroupBy[Series]):
 
         Returns
         -------
-        matplotlib.axes.Axes or ndarray of Axes
-            The returned matplotlib axes or array of axes depending on input.
+        Series
+            The Axes returned by :meth:`Series.hist` for each group, indexed by
+            group key.
 
         See Also
         --------
@@ -4014,20 +4017,15 @@ class DataFrameGroupBy(GroupBy[DataFrame]):
         """
         Compute pairwise covariance of columns, excluding NA/null values.
 
-        Compute the pairwise covariance among the series of a DataFrame.
-        The returned data frame is the `covariance matrix
+        Computes a `covariance matrix
         <https://en.wikipedia.org/wiki/Covariance_matrix>`__ of the columns
-        of the DataFrame.
+        for each group.
 
         Both NA and null values are automatically excluded from the
         calculation. (See the note below about bias from missing values.)
         A threshold can be set for the minimum number of
         observations for each value created. Comparisons with observations
         below this threshold will be returned as ``NaN``.
-
-        This method is generally used for the analysis of time series data to
-        understand the relationship between different measures
-        across time.
 
         Parameters
         ----------
@@ -4049,10 +4047,14 @@ class DataFrameGroupBy(GroupBy[DataFrame]):
         Returns
         -------
         DataFrame
-            The covariance matrix of the series of the DataFrame.
+            The covariance matrix of the columns for each group, indexed by
+            group key and column name.
 
         See Also
         --------
+        DataFrame.cov : Compute pairwise covariance of columns.
+        DataFrameGroupBy.corr : Compute pairwise correlation of columns
+            for each group.
         Series.cov : Compute covariance with another Series.
         core.window.ewm.ExponentialMovingWindow.cov : Exponential weighted sample
             covariance.
@@ -4061,7 +4063,6 @@ class DataFrameGroupBy(GroupBy[DataFrame]):
 
         Notes
         -----
-        Returns the covariance matrix of the DataFrame's time series.
         The covariance is normalized by N-ddof.
 
         For DataFrames that have Series that are missing data (assuming that
@@ -4132,9 +4133,8 @@ class DataFrameGroupBy(GroupBy[DataFrame]):
         """
         Draw histogram of the DataFrame's columns for each group.
 
-        A separate histogram subplot is generated for each group, making it
-        easier to visually compare the distribution of each numeric column
-        across groups. Internally this calls :meth:`DataFrame.hist` on every
+        Each group is plotted in its own figure, with one histogram subplot per
+        numeric column. Internally this calls :meth:`DataFrame.hist` on every
         group's frame, so the same matplotlib options are accepted.
 
         Parameters
@@ -4192,9 +4192,9 @@ class DataFrameGroupBy(GroupBy[DataFrame]):
 
         Returns
         -------
-        matplotlib.Axes or numpy.ndarray
-            A ``matplotlib.Axes`` object or an array of ``Axes`` objects, depending on
-            the layout and grouping.
+        Series
+            Indexed by group key; each value is the ``numpy.ndarray`` of ``Axes``
+            returned by :meth:`DataFrame.hist` for that group.
 
         See Also
         --------
