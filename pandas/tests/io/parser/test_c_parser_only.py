@@ -1616,7 +1616,7 @@ def _raise_on_five(value):
             "a,b\n" + "".join(f"{i},{'oops' if i == 5 else i}\n" for i in range(20)),
             {"dtype": {"b": "int64"}},
             ValueError,
-            "invalid literal for int",
+            "invalid value 'oops' at position 5",
         ),
         (
             "a,b\n" + "".join(f"{i},{i}\n" for i in range(20)),
@@ -1847,20 +1847,32 @@ def test_mixed_dtype_warning_with_mixed_implicit_index(c_parser_only, monkeypatc
     assert result.index.name is None
 
 
+def test_bool_dtype_error_locates_value(c_parser_only):
+    # GH#53966; the python engine reads any non-empty string as True instead
+    parser = c_parser_only
+    data = "b\nTrue\nFalse\nx\n"
+
+    msg = "column b to type bool: invalid value 'x' at position 2"
+    with pytest.raises(ValueError, match=msg):
+        parser.read_csv(StringIO(data), dtype={"b": bool})
+
+
 @pytest.mark.parametrize(
-    "data, kwargs, dtype, offender",
+    "data, kwargs, dtype, offender, position",
     [
         (
             "a;b\na;1,20\nb;22,3\nc;1.234,56\n",
             {"decimal": ","},
             "float64",
             "1.234,56",
+            2,
         ),
         (
             "a;b\na;1,000\nb;x\n",
             {"thousands": ","},
             "int64",
             "x",
+            1,
         ),
         (
             # GH#41117
@@ -1875,16 +1887,18 @@ def test_mixed_dtype_warning_with_mixed_implicit_index(c_parser_only, monkeypatc
             {},
             "int64",
             "x",
+            1,
         ),
     ],
 )
 def test_unparseable_dtype_names_offending_value(
-    c_parser_only, data, kwargs, dtype, offender
+    c_parser_only, data, kwargs, dtype, offender, position
 ):
     # GH#59299 name the value the parser rejected, not an earlier valid one
     parser = c_parser_only
 
-    with pytest.raises(ValueError, match=re.escape(repr(offender))):
+    msg = re.escape(f"column b to type {dtype}: invalid value {offender!r}")
+    with pytest.raises(ValueError, match=f"{msg} at position {position}$"):
         parser.read_csv(StringIO(data), sep=";", dtype={"b": dtype}, **kwargs)
 
 

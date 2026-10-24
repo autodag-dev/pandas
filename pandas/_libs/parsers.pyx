@@ -452,6 +452,8 @@ cdef class TextReader:
         # depends on which rows the parser saw, so the parallel reader checks
         # this and falls back to a serial read (GH#66259).
         public bint na_left_literal
+        # data rows converted by earlier reads, to locate conversion errors
+        int64_t row_offset
         uint64_t parser_start  # this is modified after __init__
         const char *encoding_errors
         object _encoding_errors
@@ -659,6 +661,7 @@ cdef class TextReader:
         self.trim_after_read = True
         self.warning_sink = None
         self.na_left_literal = False
+        self.row_offset = 0
 
         # None by identity, not in the tuple; see tzconversion.pyx (GH#66939)
         if float_precision is None or float_precision in (
@@ -1277,6 +1280,7 @@ cdef class TextReader:
             self._convert_batched(batch, start, end, block_rows, results)
 
         self.parser_start += end - start
+        self.row_offset += end - start
 
         return results
 
@@ -1563,9 +1567,13 @@ cdef class TextReader:
         # The third element is the boolean NA mask recorded by the numeric
         # converters, or None for column kinds that do not record one.
 
+        if name is None:
+            # header=None labels a column by its position
+            name = i
+
         if col_dtype is not None:
             col_res, na_count, na_mask = self._convert_with_dtype(
-                col_dtype, i, start, end, na_filter,
+                col_dtype, i, name, start, end, na_filter,
                 1, na_hashset, na_fset, False)
 
             # Fallback on the parse (e.g. we requested int dtype,
@@ -1617,7 +1625,8 @@ cdef class TextReader:
 
                 try:
                     col_res, na_count, na_mask = self._convert_with_dtype(
-                        dt, i, start, end, na_filter, 0, na_hashset, na_fset, True)
+                        dt, i, name, start, end, na_filter, 0, na_hashset, na_fset,
+                        True)
                 except ValueError as e:
                     if str(e) == "Number is not int":
                         maybe_int = False
@@ -1655,7 +1664,7 @@ cdef class TextReader:
             # _maybe_upcast(), but if col_dtype is a floating type we should just
             # take care of that cast here.
             if col_res.dtype == np.bool_ and col_dtype.kind == "f":
-                mask = col_res.view(np.uint8) == na_values[np.uint8]
+                mask = _bool_na_mask(col_res)
                 col_res = col_res.astype(col_dtype)
                 np.putmask(col_res, mask, np.nan)
                 return col_res, na_count, None
@@ -1663,24 +1672,27 @@ cdef class TextReader:
             # NaNs are already cast to True here, so can not use astype
             if col_res.dtype == np.bool_ and col_dtype.kind in "iu":
                 if na_count > 0:
+                    position = _bool_na_mask(col_res).argmax()
                     raise ValueError(
                         f"cannot safely convert passed user dtype of "
                         f"{col_dtype} for {np.bool_} dtyped data in "
-                        f"column {i} due to NA values"
+                        f"column {name} due to NA values at position "
+                        f"{self.row_offset + position}"
                     )
 
-            if col_res.dtype == object and col_dtype.kind in "iuf":
+            if col_res.dtype == object and col_dtype.kind in "iufb":
                 # GH#59299 name the token our converters rejected; the cast below
                 # uses float()/int(), which ignore `decimal` and `thousands`.
                 bad_token = _first_unparseable_token(
                     self.parser, i, start, end, na_filter, na_hashset,
-                    col_dtype.kind == "f", self.encoding_errors)
+                    col_dtype.kind, self.true_set, self.false_set,
+                    self.encoding_errors)
                 if bad_token is not None:
-                    if col_dtype.kind == "f":
-                        raise ValueError(
-                            f"could not convert string to float: {bad_token!r}")
+                    position, token = bad_token
                     raise ValueError(
-                        f"invalid literal for int() with base 10: {bad_token!r}")
+                        f"Unable to convert column {name} to type {col_dtype}: "
+                        f"invalid value {token!r} at position "
+                        f"{self.row_offset + position}")
 
             # only allow safe casts, eg. with a nan you cannot safely cast to int
             try:
@@ -1691,15 +1703,14 @@ cdef class TextReader:
                 # even with no nans
                 col_res_orig = col_res
                 col_res = col_res.astype(col_dtype)
-                if (col_res != col_res_orig).any():
-                    raise ValueError(
-                        f"cannot safely convert passed user dtype of "
-                        f"{col_dtype} for {col_res_orig.dtype.name} dtyped data in "
-                        f"column {i}")
+                changed = col_res != col_res_orig
+                if changed.any():
+                    raise unsafe_cast_error(col_res_orig, changed, col_dtype, name,
+                                            self.row_offset)
 
         return col_res, na_count, na_mask
 
-    cdef _convert_with_dtype(self, object dtype, Py_ssize_t i,
+    cdef _convert_with_dtype(self, object dtype, Py_ssize_t i, object name,
                              int64_t start, int64_t end,
                              bint na_filter,
                              bint user_dtype,
@@ -1805,6 +1816,8 @@ cdef class TextReader:
                     f"Extension Array: {array_type} must implement "
                     f"_from_sequence_of_strings in order "
                     f"to be used in parser methods")
+            except (ValueError, TypeError, OverflowError) as err:
+                raise conversion_error(err, dtype, name) from err
 
             return result, na_count, None
 
@@ -1815,11 +1828,19 @@ cdef class TextReader:
                     raise_on_invalid)
                 if user_dtype and na_count is not None:
                     if na_count > 0:
-                        raise ValueError(f"Integer column has NA values in column {i}")
+                        raise ValueError(
+                            f"Integer column has NA values in column {name} at "
+                            f"position {self.row_offset + na_mask.argmax()}")
             except OverflowError:
-                result, na_mask = _try_uint64(self.parser, i, start, end,
-                                              na_filter, na_hashset,
-                                              raise_on_invalid)
+                try:
+                    result, na_mask = _try_uint64(self.parser, i, start, end,
+                                                  na_filter, na_hashset,
+                                                  raise_on_invalid)
+                except (OverflowError, ValueError) as err:
+                    if not user_dtype:
+                        # inference falls back to Python ints or strings
+                        raise
+                    raise conversion_error(err, dtype, name) from err
                 na_count = 0
 
             if result is not None and user_dtype and result.dtype != dtype:
@@ -1827,11 +1848,10 @@ cdef class TextReader:
                 #  result from the overflow fallback above, not wrap it into
                 #  the int64 it asked to try.
                 casted = result.astype(dtype)
-                if (casted != result).any():
-                    raise ValueError(
-                        f"cannot safely convert passed user dtype of "
-                        f"{dtype} for {result.dtype.name} dtyped data in "
-                        f"column {i}")
+                changed = casted != result
+                if changed.any():
+                    raise unsafe_cast_error(result, changed, dtype, name,
+                                            self.row_offset)
                 result = casted
 
             return result, na_count, na_mask
@@ -1848,14 +1868,19 @@ cdef class TextReader:
             # latter is what to_csv writes for complex columns.
             result, na_count = self._string_convert(i, start, end, na_filter,
                                                     na_hashset)
-            return np.asarray(result, dtype=dtype), na_count, None
+            try:
+                return np.asarray(result, dtype=dtype), na_count, None
+            except ValueError as err:
+                raise conversion_error(err, dtype, name) from err
         elif dtype.kind == "b":
             result, na_count = _try_bool_flex(self.parser, i, start, end,
                                               na_filter, na_hashset,
                                               self.true_set, self.false_set)
             if user_dtype and na_count is not None:
                 if na_count > 0:
-                    raise ValueError(f"Bool column has NA values in column {i}")
+                    raise ValueError(
+                        f"Bool column has NA values in column {name} at position "
+                        f"{self.row_offset + _bool_na_mask(result).argmax()}")
             return result, na_count, None
 
         elif dtype.kind == "S":
@@ -2324,6 +2349,40 @@ STR_NA_VALUES = {
     "None",
 }
 _NA_VALUES = _ensure_encoded(list(STR_NA_VALUES))
+
+
+def conversion_error(err, dtype, name):
+    """
+    Name the column in the error raised converting it to the ``dtype`` argument.
+    """
+    msg = f"Unable to convert column {name} to type {dtype}: {err}"
+    # keep the error's class, e.g. pyarrow.ArrowInvalid
+    try:
+        return type(err)(msg)
+    except Exception:
+        return ValueError(msg)
+
+
+def unsafe_cast_error(original, changed, dtype, name, int64_t offset):
+    """
+    Build the error for a cast to the ``dtype`` argument that changed values,
+    naming the first one; ``changed`` is the elementwise mask of changes.
+    """
+    position = changed.argmax()
+    value = original[position]
+    if isinstance(value, np.generic):
+        # repr as 2.5, not np.float64(2.5)
+        value = value.item()
+    return ValueError(
+        f"cannot safely convert passed user dtype of {dtype} for "
+        f"{original.dtype.name} dtyped data in column {name}: value "
+        f"{value!r} at position {offset + position}"
+    )
+
+
+cdef _bool_na_mask(ndarray result):
+    # _try_bool_flex marks NA slots with the uint8 NA sentinel
+    return result.view(np.uint8) == na_values[np.uint8]
 
 
 def _maybe_upcast(
@@ -3818,34 +3877,46 @@ cdef int _probe_bool_flex(parser_t *parser, int64_t col,
     return 0
 
 
-# -> str | None
+# -> tuple[int, str] | None
 cdef _first_unparseable_token(parser_t *parser, int64_t col,
                               int64_t line_start, int64_t line_end,
                               bint na_filter,
                               const kh_str_starts_t *na_hashset,
-                              bint is_float, const char *encoding_errors):
+                              str kind,
+                              const kh_str_starts_t *true_hashset,
+                              const kh_str_starts_t *false_hashset,
+                              const char *encoding_errors):
     """
-    The first token in the column that the numeric converters reject, decoded,
-    or None if every token is parseable.
+    The position (from line_start) and decoded text of the first token in the
+    column that the converters for dtype ``kind`` ("i", "u", "f" or "b") reject,
+    or None if every token parses.
     """
     cdef:
         int error
         coliter_t it
         const char *word = NULL
         c_int64_t token_idx = 0
-        int64_t word_len
+        int64_t word_len, position
         char *p_end
         float64_t value
+        uint8_t flag
 
     coliter_setup(&it, parser, col, line_start)
-    for _ in range(line_end - line_start):
+    for position in range(line_end - line_start):
         word = coliter_next_with_idx(&it, &token_idx)
         word_len = _token_len(parser, token_idx)
         if na_filter and kh_get_str_starts_item(na_hashset, word,
                                                 <size_t>word_len):
             continue
         error = 0
-        if is_float:
+        if kind == "b":
+            # mirrors _try_bool_flex_nogil
+            if (kh_get_str_starts_item(true_hashset, word, <size_t>word_len)
+                    or kh_get_str_starts_item(false_hashset, word,
+                                              <size_t>word_len)
+                    or to_boolean(word, word_len, &flag) == 0):
+                continue
+        elif kind == "f":
             parser.double_converter(word, &p_end, parser.decimal,
                                     parser.sci, parser.thousands,
                                     1, &error, NULL, word + word_len)
@@ -3858,7 +3929,7 @@ cdef _first_unparseable_token(parser_t *parser, int64_t col,
             # A token that only overflows int64 is still a valid integer; keep scanning.
             if error == 0 or error == ERROR_OVERFLOW:
                 continue
-        return PyUnicode_DecodeUTF8(word, word_len, encoding_errors)
+        return position, PyUnicode_DecodeUTF8(word, word_len, encoding_errors)
     return None
 
 
