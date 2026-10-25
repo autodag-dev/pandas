@@ -724,10 +724,6 @@ cdef int64_t parse_timedelta_string(
         # hh:mm:ss.
         elif c == ":":
 
-            # we flip this off if we have a leading value
-            if have_value:
-                neg = 0
-
             # we are in the pattern hh:mm:ss pattern
             if len(number):
                 if current_unit is None:
@@ -2349,22 +2345,26 @@ cdef class _Timedelta(timedelta):
 
         self._ensure_components()
 
-        if self._d < 0:
-            sign = " +"
+        if self.total_seconds() < 0:
+            # TODO: overwriting self with a local variable here, this might not be desired
+            self = abs(self)
+            # TODO: for some reason the Timedelta object is not stored correct if we do not first print it
+            # or call __repr__() or __str() also works. It should be possible to do this differently.
+            print("self:", self)
+            sign = "-"
         else:
-            sign = " "
+            sign = ""
 
         if format == "all":
-            fmt = ("{days} days{sign}{hours:02}:{minutes:02}:{seconds:02}."
+            fmt = ("{sign}{days} days {hours:02}:{minutes:02}:{seconds:02}."
                    "{milliseconds:03}{microseconds:03}{nanoseconds:03}")
         elif format == "us":
-            fmt = ("{days} days{sign}{hours:02}:{minutes:02}:{seconds:02}."
+            fmt = ("{sign}{days} days {hours:02}:{minutes:02}:{seconds:02}."
                    "{milliseconds:03}{microseconds:03}")
         else:
             # if we have a partial day
             subs = (self._h or self._m or self._s or
                     self._ms or self._us or self._ns)
-
             if self._ms or self._us or self._ns:
                 seconds_fmt = "{seconds:02}.{milliseconds:03}{microseconds:03}"
                 if self._ns:
@@ -2374,11 +2374,11 @@ cdef class _Timedelta(timedelta):
                 seconds_fmt = "{seconds:02}"
 
             if format == "sub_day" and not self._d:
-                fmt = "{hours:02}:{minutes:02}:" + seconds_fmt
+                fmt = "{sign}{hours:02}:{minutes:02}:" + seconds_fmt
             elif subs or format == "long":
-                fmt = "{days} days{sign}{hours:02}:{minutes:02}:" + seconds_fmt
+                fmt = "{sign}{days} days {hours:02}:{minutes:02}:" + seconds_fmt
             else:
-                fmt = "{days} days"
+                fmt = "{sign}{days} days"
 
         comp_dict = self.components._asdict()
         comp_dict["sign"] = sign
