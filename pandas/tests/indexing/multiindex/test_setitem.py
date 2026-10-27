@@ -686,6 +686,27 @@ def test_assign_multiindex_columns_existing_key_no_warning():
     assert result.iloc[0].tolist() == [3, 3]
 
 
+def test_assign_multiindex_columns_warns():
+    # GH#17024 - keyword arguments cannot be tuples, so the warning points at
+    #  df[full_tuple] = ... rather than at an impossible tuple keyword
+    mi = MultiIndex.from_tuples([("a", "b")], names=["x", "y"])
+    df = DataFrame([[1]], columns=mi)
+    msg = re.escape("DataFrame.assign cannot take a tuple key; use df[('new', '')]")
+    with tm.assert_produces_warning(Pandas4Warning, match=msg):
+        result = df.assign(new=[2])
+    assert result.columns.tolist() == [("a", "b"), ("new", "")]
+
+
+def test_assign_multiindex_columns_existing_key_no_warning():
+    # GH#17024 - a key that matches existing columns is not an expansion
+    mi = MultiIndex.from_tuples([("a", "b"), ("a", "c")], names=["x", "y"])
+    df = DataFrame([[1, 2]], columns=mi)
+    with tm.assert_produces_warning(None):
+        result = df.assign(a=[3])
+    assert result.columns.tolist() == [("a", "b"), ("a", "c")]
+    assert result.iloc[0].tolist() == [3, 3]
+
+
 def test_insert_multiindex_scalar_key_warns():
     # GH#17024 - df.insert with a non-tuple key pads MultiIndex columns
     mi = pd.MultiIndex.from_tuples([("a", "b")], names=["x", "y"])
