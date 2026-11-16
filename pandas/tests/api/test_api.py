@@ -267,6 +267,8 @@ class TestApi(Base):
     ]
     allowed_typing = [
         "DataFrameGroupBy",
+        "DatetimeIndexResampler",
+        "DatetimeIndexResamplerGroupby",
         "DatetimeIndexResamplerGroupBy",
         "Expanding",
         "ExpandingGroupBy",
@@ -278,17 +280,17 @@ class TestApi(Base):
         "NaTType",
         "NAType",
         "NoDefault",
+        "PeriodIndexResampler",
+        "PeriodIndexResamplerGroupby",
         "PeriodIndexResamplerGroupBy",
-        "Resampler",
         "Rolling",
-        "RollingGroupBy",
         "SeriesGroupBy",
         "StataReader",
         "SASReader",
+        "TimedeltaIndexResampler",
+        "TimedeltaIndexResamplerGroupby",
         "TimedeltaIndexResamplerGroupBy",
-        "TimeGrouper",
         "Window",
-        "aliases",
     ]
     allowed_api_types = [
         "is_any_real_numeric_dtype",
