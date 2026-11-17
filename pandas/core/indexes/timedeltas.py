@@ -53,6 +53,8 @@ if TYPE_CHECKING:
 
     import numpy as np
 
+    import numpy as np
+
     from pandas._libs import NaTType
     from pandas._typing import (
         AxisInt,
