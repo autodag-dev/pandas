@@ -2046,3 +2046,37 @@ def test_bare_cr_then_leading_delimiter(c_parser_only, data, kwargs, last):
     result = c_parser_only.read_csv(StringIO(data), **kwargs)
     expected = pd.DataFrame({"x": [1.0, np.nan], "y": ["2", last]})
     tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "data, kwargs, dtype, offender",
+    [
+        (
+            "a;b\na;1,20\nb;22,3\nc;1.234,56\n",
+            {"decimal": ","},
+            "float64",
+            "1.234,56",
+        ),
+        (
+            "a;b\na;1,000\nb;x\n",
+            {"thousands": ","},
+            "int64",
+            "x",
+        ),
+        (
+            # overflowing-but-valid token before the offender
+            "a;b\na;18446744073709551615\nb;x\n",
+            {},
+            "int64",
+            "x",
+        ),
+    ],
+)
+def test_unparseable_dtype_names_offending_value(
+    c_parser_only, data, kwargs, dtype, offender
+):
+    # GH#59299 name the value the parser rejected, not an earlier valid one
+    parser = c_parser_only
+
+    with pytest.raises(ValueError, match=re.escape(repr(offender))):
+        parser.read_csv(StringIO(data), sep=";", dtype={"b": dtype}, **kwargs)
