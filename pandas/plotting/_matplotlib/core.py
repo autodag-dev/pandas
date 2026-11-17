@@ -2285,7 +2285,6 @@ class BarPlot(MPLPlot):
                     log=self.log,
                     **kwds,
                 )
-                ax.set_title(label)
             elif self.stacked:
                 mask = y >= 0
                 start = np.where(mask, pos_prior, neg_prior) + self._start_base
