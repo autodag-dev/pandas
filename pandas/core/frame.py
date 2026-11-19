@@ -10053,11 +10053,13 @@ class DataFrame(NDFrame, OpsMixin):
         --------
         >>> df = pd.DataFrame(
         ...     {"Grade": ["A", "B", "A", "C"]},
-        ...     index=[
-        ...         ["Final exam", "Final exam", "Coursework", "Coursework"],
-        ...         ["History", "Geography", "History", "Geography"],
-        ...         ["January", "February", "March", "April"],
-        ...     ],
+        ...     index=pd.MultiIndex.from_arrays(
+        ...         [
+        ...             ["Final exam", "Final exam", "Coursework", "Coursework"],
+        ...             ["History", "Geography", "History", "Geography"],
+        ...             ["January", "February", "March", "April"],
+        ...         ]
+        ...     ),
         ... )
         >>> df
                                             Grade
@@ -10782,10 +10784,12 @@ class DataFrame(NDFrame, OpsMixin):
         ...         "cost": [250, 150, 100, 150, 300, 220],
         ...         "revenue": [100, 250, 300, 200, 175, 225],
         ...     },
-        ...     index=[
-        ...         ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
-        ...         ["A", "B", "C", "A", "B", "C"],
-        ...     ],
+        ...     index=pd.MultiIndex.from_arrays(
+        ...         [
+        ...             ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
+        ...             ["A", "B", "C", "A", "B", "C"],
+        ...         ]
+        ...     ),
         ... )
         >>> df_multindex
               cost  revenue
@@ -10938,10 +10942,12 @@ class DataFrame(NDFrame, OpsMixin):
         ...         "cost": [250, 150, 100, 150, 300, 220],
         ...         "revenue": [100, 250, 300, 200, 175, 225],
         ...     },
-        ...     index=[
-        ...         ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
-        ...         ["A", "B", "C", "A", "B", "C"],
-        ...     ],
+        ...     index=pd.MultiIndex.from_arrays(
+        ...         [
+        ...             ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
+        ...             ["A", "B", "C", "A", "B", "C"],
+        ...         ]
+        ...     ),
         ... )
         >>> df_multindex
               cost  revenue
@@ -11088,10 +11094,11 @@ class DataFrame(NDFrame, OpsMixin):
 
         Compare to a MultiIndex by level.
 
-        >>> df_multindex = pd.DataFrame({'cost': [250, 150, 100, 150, 300, 220],
-        ...                              'revenue': [100, 250, 300, 200, 175, 225]},
-        ...                             index=[['Q1', 'Q1', 'Q1', 'Q2', 'Q2', 'Q2'],
-        ...                                    ['A', 'B', 'C', 'A', 'B', 'C']])
+        >>> df_multindex = pd.DataFrame(
+        ...     {'cost': [250, 150, 100, 150, 300, 220],
+        ...      'revenue': [100, 250, 300, 200, 175, 225]},
+        ...     index=pd.MultiIndex.from_arrays([['Q1', 'Q1', 'Q1', 'Q2', 'Q2', 'Q2'],
+        ...                                      ['A', 'B', 'C', 'A', 'B', 'C']]))
         >>> df_multindex
               cost  revenue
         Q1 A   250      100
@@ -11243,10 +11250,12 @@ class DataFrame(NDFrame, OpsMixin):
         ...         "cost": [250, 150, 100, 150, 300, 220],
         ...         "revenue": [100, 250, 300, 200, 175, 225],
         ...     },
-        ...     index=[
-        ...         ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
-        ...         ["A", "B", "C", "A", "B", "C"],
-        ...     ],
+        ...     index=pd.MultiIndex.from_arrays(
+        ...         [
+        ...             ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
+        ...             ["A", "B", "C", "A", "B", "C"],
+        ...         ]
+        ...     ),
         ... )
         >>> df_multindex
               cost  revenue
@@ -11393,10 +11402,11 @@ class DataFrame(NDFrame, OpsMixin):
 
         Compare to a MultiIndex by level.
 
-        >>> df_multindex = pd.DataFrame({'cost': [250, 150, 100, 150, 300, 220],
-        ...                              'revenue': [100, 250, 300, 200, 175, 225]},
-        ...                             index=[['Q1', 'Q1', 'Q1', 'Q2', 'Q2', 'Q2'],
-        ...                                    ['A', 'B', 'C', 'A', 'B', 'C']])
+        >>> df_multindex = pd.DataFrame(
+        ...     {'cost': [250, 150, 100, 150, 300, 220],
+        ...      'revenue': [100, 250, 300, 200, 175, 225]},
+        ...     index=pd.MultiIndex.from_arrays([['Q1', 'Q1', 'Q1', 'Q2', 'Q2', 'Q2'],
+        ...                                      ['A', 'B', 'C', 'A', 'B', 'C']]))
         >>> df_multindex
               cost  revenue
         Q1 A   250      100
@@ -11548,10 +11558,12 @@ class DataFrame(NDFrame, OpsMixin):
         ...         "cost": [250, 150, 100, 150, 300, 220],
         ...         "revenue": [100, 250, 300, 200, 175, 225],
         ...     },
-        ...     index=[
-        ...         ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
-        ...         ["A", "B", "C", "A", "B", "C"],
-        ...     ],
+        ...     index=pd.MultiIndex.from_arrays(
+        ...         [
+        ...             ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2"],
+        ...             ["A", "B", "C", "A", "B", "C"],
+        ...         ]
+        ...     ),
         ... )
         >>> df_multindex
               cost  revenue
@@ -14791,7 +14803,7 @@ class DataFrame(NDFrame, OpsMixin):
 
         If you have multi-index columns:
 
-        >>> df.columns = [list("ABC"), list("DEF")]
+        >>> df.columns = pd.MultiIndex.from_arrays([list("ABC"), list("DEF")])
         >>> df
         A  B  C
         D  E  F
