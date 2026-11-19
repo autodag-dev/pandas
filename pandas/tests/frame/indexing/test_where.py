@@ -1454,3 +1454,19 @@ def test_fillna_frame_other_categorical_other_categories():
 
     expected = pd.DataFrame({"a": pd.Categorical(["x", "x", "x"], dtype=dtype)})
     tm.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("method", ["where", "mask"])
+def test_where_other_frame_differing_extension_dtypes(method):
+    # GH#22791 values that collide as float64 keep their identity
+    other = pd.DataFrame(
+        {
+            "a": pd.array([2**60 + 1, None], dtype="Int64"),
+            "b": pd.array([1, 2], dtype="Int32"),
+        }
+    )
+    df = pd.DataFrame({"a": [None, None], "b": [None, None]}, dtype=object)
+    cond = df.notna() if method == "where" else df.isna()
+    result = getattr(df, method)(cond, other)
+    expected = pd.DataFrame({"a": [2**60 + 1, pd.NA], "b": [1, 2]}, dtype=object)
+    tm.assert_frame_equal(result, expected)
