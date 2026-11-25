@@ -380,6 +380,12 @@ Other API changes
 - The ``year`` column of :meth:`DatetimeIndex.isocalendar` and :meth:`Series.dt.isocalendar` is now ``int32`` instead of ``uint32``, so that years before year 1 are representable (:issue:`66549`)
 - ``numexpr`` 2.14.1 is no longer used to accelerate arithmetic and comparisons; some builds of that release intermittently and silently returned incorrect results, such as an all-zero column, for operations on large objects. pandas now falls back to NumPy, warning the first time an operation would have used ``numexpr``, and :func:`eval`, :meth:`DataFrame.eval` and :meth:`DataFrame.query` raise ``ImportError`` when passed an explicit ``engine="numexpr"``; install ``numexpr`` 2.14.2 or newer to restore the acceleration. HDF5 ``where=`` queries are evaluated by PyTables, which imports ``numexpr`` itself, and are neither covered nor warned about (:issue:`65408`)
 
+.. _whatsnew_310.api_breaking.build:
+
+Build
+^^^^^
+- C++20 is required to build from source (:issue:`66735`)
+
 .. ---------------------------------------------------------------------------
 .. _whatsnew_310.deprecations:
 
