@@ -653,6 +653,10 @@ class PrettyDict(dict[_KT, _VT]):
 _ANSI_ESCAPE = r"\x1b\[[0-?]*[ -/]*[@-~]"
 
 
+# CSI escape sequences (e.g. terminal colors) take up no space on screen
+_ANSI_ESCAPE = r"\x1b\[[0-?]*[ -/]*[@-~]"
+
+
 class _TextAdjustment:
     def __init__(self) -> None:
         self.encoding = config["display"]["encoding"]
