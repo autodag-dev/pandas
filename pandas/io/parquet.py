@@ -483,10 +483,8 @@ def to_parquet(
         path when writing a partitioned dataset. The engine fastparquet does
         not accept file-like objects.
 
-        The string could be a URL. Valid URL schemes include http, ftp, s3,
-        gs, and file. For file URLs, a host is expected. A local file could be:
-        ``file://localhost/path/to/table.parquet``. A remote example could be:
-        ``s3://bucket/path/to/table.parquet``.
+        The string could be a local ``file://`` URL or the URL of a writable
+        remote filesystem, such as ``s3://bucket/path/to/table.parquet``.
 
         Certain URL schemes may require additional packages. For example, S3
         URLs require the ``s3fs`` library. See
