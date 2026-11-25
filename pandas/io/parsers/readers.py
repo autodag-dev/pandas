@@ -2679,6 +2679,10 @@ def read_fwf(
         Number of lines to read from the file per chunk.
     **kwds : optional
         Additional keyword arguments accepted by :func:`read_csv`.
+        For example, ``comment`` specifies a character indicating that the
+        remainder of a line should not be parsed. Full-line comments are
+        ignored, including when the comment character occurs outside the
+        specified or inferred column widths.
 
     Returns
     -------
