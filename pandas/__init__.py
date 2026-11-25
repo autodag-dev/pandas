@@ -148,6 +148,18 @@ import pandas.api as api  # noqa: PLR0402  (keeps the import lazy under PEP 810)
 import pandas.testing as testing  # noqa: PLR0402  (keeps the import lazy under PEP 810)
 from pandas.util._print_versions import show_versions
 
+# GH#41432: importing this module registers the pyarrow extension types for
+# Period and Interval, so pyarrow recognizes them when reading pandas data
+# directly instead of only after a parquet or feather round-trip has triggered
+# the lazy registration. Imported for that side effect only.
+from pandas.compat.pyarrow import HAS_PYARROW as _HAS_PYARROW
+
+if _HAS_PYARROW:
+    from pandas.core.arrays.arrow import extension_types as _extension_types
+
+    del _extension_types
+del _HAS_PYARROW
+
 from pandas.io.api import (
     # excel
     ExcelFile,
