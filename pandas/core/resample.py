@@ -2076,14 +2076,13 @@ class _GroupByMixin(PandasObject, SelectionMixin[Any]):
         result = self._groupby.apply(func)
 
         # GH 47705
-        if (
-            isinstance(result, ABCDataFrame)
-            and len(result) == 0
-            and not isinstance(result.index, PeriodIndex)
-        ):
-            result = result.set_index(
-                _asfreq_compat(self.obj.index[:0], freq=self.freq), append=True
-            )
+        if isinstance(result, ABCDataFrame) and len(result) == 0:
+            new_index = _asfreq_compat(self.obj.index[:0], freq=self.freq)
+            if not self._groupby.group_keys:
+                # GH#21192 no group keys to append to
+                result.index = new_index
+            elif not isinstance(result.index, PeriodIndex):
+                result = result.set_index(new_index, append=True)
 
         return self._wrap_result(result)
 
